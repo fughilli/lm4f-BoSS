@@ -89,7 +89,7 @@ inline uint32_t sys_puts(char* str, uint32_t len)
 			"svc $0x80\n\t"
 			"mov %0,R0"
 			: "=r" (writelen) :
-			  "r" (SYSCALL_PUTC), "r" ((uint32_t)str), "r" (len) : "memory"
+			  "r" (SYSCALL_PUTS), "r" ((uint32_t)str), "r" (len) : "memory"
 	);
 	return writelen;
 }
@@ -116,7 +116,7 @@ inline void sys_exit(int status)
 			"mov R0,%0\n\t"
 			"mov R1,%1\n\t"
 			"svc $0x80\n\t"
-			: : "r" (SYSCALL_SET_PRI), "r" (status) : "memory"
+			: : "r" (SYSCALL_EXIT), "r" (status) : "memory"
 	);
 
 	while (1)
