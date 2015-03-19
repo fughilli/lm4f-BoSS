@@ -11,7 +11,7 @@
 #include "thread.h"
 #include "syscall_numbers.h"
 
-void kernel_init(void (*first_proc_main)(void*));
+void kernel_init();
 void kernel_run(thread_t* thread);
 
 #endif /* KERNEL_H_ */

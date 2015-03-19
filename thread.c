@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-thread_t thread_table[MAX_THREADS];
+thread_t thread_table[MAX_THREADS] __attribute__((aligned(0x4)));
 
 thread_t* thread_current;
 tid_t tid_counter;
@@ -89,6 +89,9 @@ tid_t thread_spawn(void (*entry)(void*), void* arg)
 			thread_table[i].regs.PC = (uint32_t)entry;
 			thread_table[i].regs.R0 = (uint32_t)arg;
 			thread_table[i].regs.SP = (uint32_t)&thread_mem[i+1];
+
+			// Ensure that thumb state is enabled
+			thread_table[i].regs.PSR = 0x01000000;
 
 			return thread_table[i].id;
 		}

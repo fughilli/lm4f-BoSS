@@ -21,22 +21,17 @@
 typedef uint32_t tid_t;
 typedef uint32_t tstate_t;
 typedef uint32_t tpri_t;
+typedef uint32_t tsleep_t;
 
 enum
 {
 	T_EMPTY,
 
-	T_RUNNABLE,
-	T_BLOCKED,
-	T_ZOMBIE
+	T_RUNNABLE, T_BLOCKED, T_ZOMBIE
 };
 
 typedef struct
 {
-	uint32_t R0;
-	uint32_t R1;
-	uint32_t R2;
-	uint32_t R3;
 	uint32_t R4;
 	uint32_t R5;
 	uint32_t R6;
@@ -45,14 +40,18 @@ typedef struct
 	uint32_t R9;
 	uint32_t R10;
 	uint32_t R11;
-	uint32_t R12;
 
-	uint32_t PSR;
-	uint32_t PC;
 	uint32_t SP;
 
-	uint32_t CONTROL;
-} __attribute__((aligned(0x4))) registers_t;
+	uint32_t R0;
+	uint32_t R1;
+	uint32_t R2;
+	uint32_t R3;
+	uint32_t R12;
+	uint32_t LR;
+	uint32_t PC;
+	uint32_t PSR;
+}__attribute__((aligned(0x4))) registers_t;
 
 typedef struct
 {
@@ -64,6 +63,9 @@ typedef struct
 
 	// Thread priority
 	tpri_t pri;
+
+	// Thread sleep counter
+	tsleep_t scnt;
 
 	// Thread registers
 	registers_t regs;
