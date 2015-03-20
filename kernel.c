@@ -8,8 +8,19 @@
 #include "kernel.h"
 #include "thread.h"
 #include "debug_serial.h"
+#include "driverlib/systick.h"
+#include "driverlib/sysctl.h"
+
+uint8_t kernel_stack[128] __attribute((aligned(8)));
 
 void kernel_schedule();
+
+static void kernel_set_scheduler_freq(uint32_t hz)
+{
+	SysTickPeriodSet(SysCtlClockGet() / hz);
+	SysTickIntEnable();
+	SysTickEnable();
+}
 
 void kernel_init()
 {
@@ -18,6 +29,8 @@ void kernel_init()
 	thread_table[0].state = T_RUNNABLE;
 	thread_table[0].id = 0;
 	thread_current = &thread_table[0];
+
+	//kernel_set_scheduler_freq(1000);
 }
 
 __attribute__((noreturn))
@@ -98,6 +111,8 @@ void svc_interrupt_handler()
 {
 	// Push the context of the trapping thread
 	asm volatile (
+			"dsb\n\t"
+			"isb\n\t"
 			// Push the remaining registers;
 			// R0,R1,R2,R3,R12,LR,PC+4,xPSR are pushed
 			// R7 is pushed on call entry
@@ -108,10 +123,13 @@ void svc_interrupt_handler()
 			: "=r" (thread_current->regs.SP) : : "memory"
 	);
 
+	asm volatile("mov SP,%0" : : "r" (kernel_stack) : "memory");
+
 	uint32_t* oldsp = (uint32_t*) thread_current->regs.SP;
 
 	// Adjust the saved stack pointer to sit above the pushed exception frame
-	thread_current->regs.SP += 0x50;
+	//thread_current->regs.SP += 0x50;
+	thread_current->regs.SP += 0x4C;
 
 	thread_current->regs.R4 = oldsp[0];
 	thread_current->regs.R5 = oldsp[1];
@@ -131,6 +149,27 @@ void svc_interrupt_handler()
 	thread_current->regs.LR = oldsp[16];
 	thread_current->regs.PC = oldsp[17];
 	thread_current->regs.PSR = oldsp[18];
+
+	/*
+	 * Determine exception cause and jump to schedule if SysTick
+	 */
+	uint32_t exceptionNumber;
+
+//	asm volatile(
+//			"mrs R12,XPSR\r\n"
+//			"mov %0,R12"
+//			: "=r" (exceptionNumber) : : "memory", "12"
+//	);
+
+	exceptionNumber &= ~0xFFFFFE00;
+
+	if (exceptionNumber == 15)
+	{
+		// Exception is due to SysTick
+		// SysTick = 15
+		// SVCall = 11
+		kernel_schedule();
+	}
 
 	switch (thread_current->regs.R0)
 	{
@@ -171,52 +210,15 @@ void svc_interrupt_handler()
 		Serial_putc(thread_current->regs.R1);
 		kernel_run(thread_current);
 		break;
+
+	case SYSCALL_PUTS:
+		Serial_puts((char*) thread_current->regs.R1, thread_current->regs.R2);
+		kernel_run(thread_current);
+		break;
 	}
 
 	while (1)
 		;
-}
-
-void systick_interrupt_handler()
-{
-	// Push the context of the trapping thread
-	asm volatile (
-			// Push the remaining registers;
-			// R0,R1,R2,R3,R12,xPSR are pushed
-			// R7 is pushed on call entry
-			// Remaining registers are:
-			"push {R4, R5, R6, R8, R9, R10, R11}\n\t"
-			// Save the stack pointer to SP
-			"mov %0,SP"
-			: "=r" (thread_current->regs.SP) : : "memory"
-	);
-
-	// Load the status bits into LR, then store them into the struct
-	asm volatile (
-			"mrs LR,APSR\n\t"
-			"mov %0,LR"
-			: "=r" (thread_current->regs.PSR) : : "memory"
-	);
-
-	uint32_t* oldsp = (uint32_t*) thread_current->regs.SP;
-	thread_current->regs.R4 = oldsp[0];
-	thread_current->regs.R5 = oldsp[1];
-	thread_current->regs.R6 = oldsp[2];
-	thread_current->regs.R8 = oldsp[3];
-	thread_current->regs.R9 = oldsp[4];
-	thread_current->regs.R10 = oldsp[5];
-	thread_current->regs.R11 = oldsp[6];
-
-	thread_current->regs.R7 = oldsp[9];
-
-	thread_current->regs.R0 = oldsp[11];
-	thread_current->regs.R1 = oldsp[12];
-	thread_current->regs.R2 = oldsp[13];
-	thread_current->regs.R3 = oldsp[14];
-	thread_current->regs.R12 = oldsp[15];
-	thread_current->regs.PC = oldsp[16];
-
-	kernel_schedule();
 }
 
 void _exit(int status)
