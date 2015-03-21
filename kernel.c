@@ -11,6 +11,8 @@
 #include "driverlib/systick.h"
 #include "driverlib/sysctl.h"
 
+#include <stdbool.h>
+
 uint8_t kernel_stack[128] __attribute((aligned(8)));
 
 void kernel_schedule();
@@ -30,7 +32,7 @@ void kernel_init()
 	thread_table[0].id = 0;
 	thread_current = &thread_table[0];
 
-	//kernel_set_scheduler_freq(1000);
+	kernel_set_scheduler_freq(100);
 }
 
 __attribute__((noreturn))
@@ -123,7 +125,7 @@ void svc_interrupt_handler()
 			: "=r" (thread_current->regs.SP) : : "memory"
 	);
 
-	asm volatile("mov SP,%0" : : "r" (kernel_stack) : "memory");
+	//asm volatile("mov SP,%0" : : "r" (kernel_stack) : "memory");
 
 	uint32_t* oldsp = (uint32_t*) thread_current->regs.SP;
 
@@ -153,23 +155,26 @@ void svc_interrupt_handler()
 	/*
 	 * Determine exception cause and jump to schedule if SysTick
 	 */
-	uint32_t exceptionNumber;
+	asm volatile(
+			"mrs R12,XPSR\r\n"
+			"lsl R12,#23\r\n"
+			"lsr R12,#23\r\n"
+			"sub R5,R12,#15\r\n"
+			"cbnz R5,_systick_dont_jump\r\n"
+			"bl kernel_schedule\r\n"
+			"_systick_dont_jump:"
+			: : :
+	);
 
-//	asm volatile(
-//			"mrs R12,XPSR\r\n"
-//			"mov %0,R12"
-//			: "=r" (exceptionNumber) : : "memory", "12"
-//	);
-
-	exceptionNumber &= ~0xFFFFFE00;
-
-	if (exceptionNumber == 15)
-	{
-		// Exception is due to SysTick
-		// SysTick = 15
-		// SVCall = 11
-		kernel_schedule();
-	}
+//	exceptionNumber &= ~0xFFFFFE00;
+//
+//	if (exceptionNumber == 15)
+//	{
+//		// Exception is due to SysTick
+//		// SysTick = 15
+//		// SVCall = 11
+//		kernel_schedule();
+//	}
 
 	switch (thread_current->regs.R0)
 	{
@@ -180,6 +185,7 @@ void svc_interrupt_handler()
 		kernel_run(thread_current);
 		break;
 
+	default:
 	case SYSCALL_EXIT:
 		thread_kill(thread_current);
 		kernel_schedule();
@@ -215,6 +221,7 @@ void svc_interrupt_handler()
 		Serial_puts((char*) thread_current->regs.R1, thread_current->regs.R2);
 		kernel_run(thread_current);
 		break;
+
 	}
 
 	while (1)
