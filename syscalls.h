@@ -118,6 +118,30 @@ inline void sys_unlock(lock_t* l)
 	);
 }
 
+inline uint32_t sys_sleep(uint32_t ms)
+{
+    uint32_t ret_ms;
+    asm volatile (
+            "mov R0,%1\n\t"
+            "mov R1,%2\n\t"
+            "svc $0x80\n\t"
+            "mov %0,R0"
+            : "=r" (ret_ms) : "r" (SYSCALL_SLEEP) : "r" (ms) : "memory"
+    );
+}
+
+inline uint32_t sys_fork()
+{
+    tid_t ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) : "r" (SYSCALL_FORK) : "memory"
+	);
+	return ret;
+}
+
 //inline void sys_set_port_dirs(uint32_t portbase, uint8_t dirs)
 //{
 //
@@ -141,6 +165,19 @@ inline void sys_exit(int status)
 			"mov R1,%1\n\t"
 			"svc $0x80\n\t"
 			: : "r" (SYSCALL_EXIT), "r" (status) : "memory"
+	);
+
+	while (1)
+		;
+}
+
+__attribute__((noreturn()))
+inline void sys_reset()
+{
+	asm volatile (
+			"mov R0,%0\n\t"
+			"svc $0x80\n\t"
+			: : "r" (SYSCALL_RESET) : "memory"
 	);
 
 	while (1)

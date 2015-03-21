@@ -82,5 +82,6 @@ void thread_init(void);
 tid_t thread_spawn(void (*entry)(void*), void* arg);
 bool thread_kill(thread_t* thread);
 bool thread_kill2(tid_t tid);
+bool thread_copy(thread_t* dest, const thread_t* src);
 
 #endif /* THREAD_H_ */
