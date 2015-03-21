@@ -89,9 +89,33 @@ inline uint32_t sys_puts(char* str, uint32_t len)
 			"svc $0x80\n\t"
 			"mov %0,R0"
 			: "=r" (writelen) :
-			  "r" (SYSCALL_PUTS), "r" ((uint32_t)str), "r" (len) : "memory"
+			"r" (SYSCALL_PUTS), "r" ((uint32_t)str), "r" (len) : "memory"
 	);
 	return writelen;
+}
+
+inline bool sys_lock(lock_t* l)
+{
+	bool ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) :
+			"r" (SYSCALL_LOCK), "r" ((uint32_t)l) : "memory"
+	);
+	return ret;
+}
+
+inline void sys_unlock(lock_t* l)
+{
+	asm volatile (
+			"mov R0,%0\n\t"
+			"mov R1,%1\n\t"
+			"svc $0x80"
+			: : "r" (SYSCALL_UNLOCK), "r" ((uint32_t)l) : "memory"
+	);
 }
 
 //inline void sys_set_port_dirs(uint32_t portbase, uint8_t dirs)

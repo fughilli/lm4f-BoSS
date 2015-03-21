@@ -20,5 +20,7 @@
 #define SYSCALL_READ_PORT (9)
 #define SYSCALL_WRITE_PORT (10)
 #define SYSCALL_FORK (11)
+#define SYSCALL_LOCK (12)
+#define SYSCALL_UNLOCK (13)
 
 #endif /* SYSCALL_NUMBERS_H_ */

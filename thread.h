@@ -22,6 +22,10 @@ typedef uint32_t tid_t;
 typedef uint32_t tstate_t;
 typedef uint32_t tpri_t;
 typedef uint32_t tsleep_t;
+typedef uint32_t lock_t;
+
+#define LOCK_LOCKED (1)
+#define LOCK_UNLOCKED (0)
 
 enum
 {

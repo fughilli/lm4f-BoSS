@@ -224,6 +224,27 @@ void svc_interrupt_handler()
 
 	}
 
+	case SYSCALL_LOCK:
+		// If the lock is already taken, return 0 and resume the spinlock
+		if (*((lock_t*) thread_current->regs.R1))
+		{
+			thread_current->regs.R0 = false;
+		}
+		else
+		{
+			// Otherwise, lock it
+			*((lock_t*) thread_current->regs.R1) = LOCK_LOCKED;
+			thread_current->regs.R0 = true;
+		}
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_UNLOCK:
+		// Release the lock
+		*((lock_t*) thread_current->regs.R1) = LOCK_UNLOCKED;
+		kernel_schedule();
+		break;
+
 	while (1)
 		;
 }
