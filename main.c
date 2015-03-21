@@ -1,9 +1,6 @@
 /*
  * main.c
  */
-
-//#include "kernel.h"
-//#include "thread.h"
 #include "inc/hw_types.h"
 #include "inc/hw_memmap.h"
 #include "inc/hw_ints.h"
@@ -18,44 +15,65 @@
 #include <stdio.h>
 #include "syscalls.h"
 #include "debug_serial.h"
+#include "kernel.h"
+#include "thread.h"
 
+lock_t printlock = LOCK_UNLOCKED;
+
+// The main routine for our application
 void app_main2(void* arg)
 {
-	char pbuf[32];
-	sprintf(pbuf, "tid: %d\r\n", sys_get_tid());
-	Serial_puts(pbuf, 100);
+	// Loop counter
+	uint8_t counter = (uint32_t)arg;
+
 	while(1)
 	{
-		Serial_puts((char*)arg, 100);
-		sys_yield();
+		// Increment the loop counter
+		counter++;
+		if(counter == 10)
+			counter = 0;
+
+		// Lock to write to the console
+		while(!sys_lock(&printlock))
+			;
+
+		// Print out a message!
+		sys_puts("Thread #", 100);
+		sys_putc('0' + sys_get_tid());
+		sys_putc('0' + counter);
+		sys_puts(" running\r\n", 100);
+
+		// Unlock when done; the kernel calls
+		//  kernel_schedule() after a sys_unlock()
+		//  to ensure fairness
+		sys_unlock(&printlock);
 	}
 }
 
+// Start two instances of the app_main2 application;
+//  start the first instance's loop counter at 5,
+//  and the second at 0
 void app_main(void* arg)
 {
-	tid_t tid = sys_get_tid();
-	thread_spawn(app_main2, "alice!\r\n");
-	thread_spawn(app_main2, "bob!\r\n");
-
-	while(1)
-		tid = sys_get_tid();
-		//sys_yield();
+	thread_spawn(app_main2, (void*)0);
+	thread_spawn(app_main2, (void*)5);
 
 	sys_exit(0);
 }
 
+// Program entry point; initializes kernel
+//  and then spawns thread 1 (app_main)
 int main(void)
 {
 	SysCtlClockSet(SYSCTL_SYSDIV_2_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN);
 
 	Serial_init();
 
-	kernel_init(app_main);
+	kernel_init();
 
-	while(1)
-		;
+	thread_spawn(app_main, 0);
 
-	return 0;
+	sys_exit(0);
 }
 
 
