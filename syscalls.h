@@ -126,8 +126,9 @@ inline uint32_t sys_sleep(uint32_t ms)
             "mov R1,%2\n\t"
             "svc $0x80\n\t"
             "mov %0,R0"
-            : "=r" (ret_ms) : "r" (SYSCALL_SLEEP) : "r" (ms) : "memory"
+            : "=r" (ret_ms) : "r" (SYSCALL_SLEEP), "r" (ms) : "memory"
     );
+    return ret_ms;
 }
 
 inline uint32_t sys_fork()
