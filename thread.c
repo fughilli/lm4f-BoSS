@@ -6,8 +6,7 @@
  */
 
 #include "thread.h"
-#include <stdlib.h>
-#include <string.h>
+#include "fast_utils.h"
 
 thread_t thread_table[MAX_THREADS] __attribute__((aligned(0x4)));
 
@@ -34,16 +33,44 @@ static thread_t* tt_entry_for_tid(tid_t id)
 }
 
 /**
+ * Find the position of a thread in the thread table from a
+ * pointer to that table entry
+ */
+static uint32_t thread_pos(const thread_t* thread)
+{
+    if(!thread)
+        return false;
+
+    int pos = (thread - thread_table);
+
+    if(pos >= 0 && pos < MAX_THREADS)
+        return (uint32_t)pos;
+
+    return MAX_THREADS;
+}
+
+/**
+ * Find the first free slot in the thread table. If there
+ * are no free spots, return MAX_THREADS
+ */
+static uint32_t thread_first_empty()
+{
+    uint32_t ret = 0;
+    do
+    {
+        if(thread_table[ret].state == T_EMPTY)
+            return ret;
+    } while((++ret) < MAX_THREADS);
+
+    return ret;
+}
+
+/**
  * Check if a given thread exists in the thread table
  */
-static bool thread_valid(thread_t* thread)
+static bool thread_valid(const thread_t* thread)
 {
-	if(!thread)
-		return false;
-
-	int pos = (thread - thread_table);
-
-	return (pos >= 0 && pos < MAX_THREADS);
+	return (thread_pos(thread) != MAX_THREADS);
 }
 
 /**
@@ -68,37 +95,36 @@ void thread_init(void)
 
 tid_t thread_spawn(void (*entry)(void*), void* arg)
 {
-	int i;
-	for(i = 0; i < MAX_THREADS; i++)
-	{
-		if(thread_table[i].state == T_EMPTY)
-		{
-			thread_table[i].state = T_RUNNABLE;
+    int i;
 
-			// tid_counter increments for every process spawned, but it cannot be zero
-			++tid_counter;
-			if(tid_counter == 0)
-				++tid_counter;
+    // If there are no free thread spots, return invalid
+    if((i = thread_first_empty()) == MAX_THREADS)
+        return 0;
 
-			// Assign the tid
-			thread_table[i].id = tid_counter;
+    thread_table[i].state = T_RUNNABLE;
 
-			// Clear the registers struct to all 0's
-			// memset(&thread_table[i].regs, 0, sizeof(registers_t));
+    // tid_counter increments for every process spawned, but it cannot be zero
+    ++tid_counter;
+    if(tid_counter == 0)
+        ++tid_counter;
 
-			thread_table[i].regs.PC = (uint32_t)entry;
-			thread_table[i].regs.R0 = (uint32_t)arg;
-			thread_table[i].regs.SP = (uint32_t)&thread_mem[i+1];
+    // Assign the tid
+    thread_table[i].id = tid_counter;
 
-			// Ensure that thumb state is enabled
-			thread_table[i].regs.PSR = 0x01000000;
+    // Clear the registers struct to all 0's
+    // memset(&thread_table[i].regs, 0, sizeof(registers_t));
 
-			return thread_table[i].id;
-		}
-	}
+    thread_table[i].regs.PC = (uint32_t)entry;
+    thread_table[i].regs.R0 = (uint32_t)arg;
+    thread_table[i].regs.SP = (uint32_t)&thread_mem[i+1];
 
-	// Invalid tid; could not spawn
-	return 0;
+    // Ensure that thumb state is enabled
+    thread_table[i].regs.PSR = 0x01000000;
+
+    thread_table[i].pri = 1;
+    thread_table[i].scnt = 0;
+
+    return thread_table[i].id;
 }
 
 bool thread_kill(thread_t* thread)
@@ -122,3 +148,52 @@ bool thread_kill2(tid_t tid)
 	return true;
 }
 
+bool thread_copy(thread_t* dest, const thread_t* src)
+{
+    if(!thread_valid(dest) || !thread_valid(src) ||
+       dest->state != T_EMPTY || src->state == T_EMPTY)
+        return false;
+
+    // Get the table entry locations for the destination and source
+    uint32_t d_index = thread_pos(dest), s_index = thread_pos(src);
+
+    // Assign the cloned thread a new tid
+    ++tid_counter;
+    if(tid_counter == 0)
+        ++tid_counter;
+
+    thread_table[d_index].id = tid_counter;
+
+    fast_memcpy(dest, src, sizeof(thread_t));
+    fast_memcpy(thread_mem[d_index], thread_mem[s_index], THREAD_MEM_SIZE);
+
+    return true;
+}
+
+bool thread_fork(thread_t* thread)
+{
+    return thread_fork2(thread, (thread_t**)0);
+}
+
+bool thread_fork2(thread_t* thread, thread_t** rt)
+{
+    if(!thread_valid(thread))
+        return false;
+
+    // Find a free slot
+    uint32_t destpos = thread_first_empty();
+
+    if(destpos == MAX_THREADS)
+        return false;
+
+    // Copy the thread, giving it a new tid; pass back the return status
+    // and the thread table entry
+    if(thread_copy(&thread_table[destpos], thread))
+    {
+        if(rt)
+            (*rt) = &thread_table[destpos];
+        return true;
+    }
+
+    return false;
+}

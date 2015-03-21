@@ -31,7 +31,7 @@ enum
 {
 	T_EMPTY,
 
-	T_RUNNABLE, T_BLOCKED, T_ZOMBIE
+	T_RUNNABLE, T_BLOCKED, T_ZOMBIE, T_SLEEPING
 };
 
 typedef struct
@@ -83,5 +83,7 @@ tid_t thread_spawn(void (*entry)(void*), void* arg);
 bool thread_kill(thread_t* thread);
 bool thread_kill2(tid_t tid);
 bool thread_copy(thread_t* dest, const thread_t* src);
+bool thread_fork(thread_t* thread);
+bool thread_fork2(thread_t* thread, thread_t** rthread);
 
 #endif /* THREAD_H_ */
