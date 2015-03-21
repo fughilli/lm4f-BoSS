@@ -55,8 +55,14 @@ void app_main2(void* arg)
 //  and the second at 0
 void app_main(void* arg)
 {
-	thread_spawn(app_main2, (void*)0);
-	thread_spawn(app_main2, (void*)5);
+    if(sys_fork())
+    {
+        thread_spawn(app_main2, (void*)0);
+    }
+    else
+    {
+        thread_spawn(app_main2, (void*)5);
+    }
 
 	sys_exit(0);
 }
