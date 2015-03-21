@@ -15,6 +15,8 @@
 
 //uint8_t kernel_stack[128] __attribute((aligned(8)));
 
+uint32_t systime_ms;
+
 void kernel_schedule();
 
 static void kernel_set_scheduler_freq(uint32_t hz)
@@ -31,6 +33,8 @@ void kernel_init()
 	thread_table[0].state = T_RUNNABLE;
 	thread_table[0].id = 0;
 	thread_current = &thread_table[0];
+
+	systime_ms = 0;
 
 	kernel_set_scheduler_freq(100);
 }
@@ -107,76 +111,11 @@ void kernel_run(thread_t* thread)
 		;
 }
 
-// Called by SVC
-__attribute__((noreturn))
-void svc_interrupt_handler()
+static void
+kernel_handle_syscall()
 {
-	// Push the context of the trapping thread
-	asm volatile (
-			"dsb\n\t"
-			"isb\n\t"
-			// Push the remaining registers;
-			// R0,R1,R2,R3,R12,LR,PC+4,xPSR are pushed
-			// R7 is pushed on call entry
-			// Remaining registers are:
-			"push {R4, R5, R6, R8, R9, R10, R11}\n\t"
-			// Save the stack pointer to SP
-			"mov %0,SP"
-			: "=r" (thread_current->regs.SP) : : "memory"
-	);
-
-	//asm volatile("mov SP,%0" : : "r" (kernel_stack) : "memory");
-
-	uint32_t* oldsp = (uint32_t*) thread_current->regs.SP;
-
-	// Adjust the saved stack pointer to sit above the pushed exception frame
-	//thread_current->regs.SP += 0x50;
-	thread_current->regs.SP += 0x4C;
-
-	thread_current->regs.R4 = oldsp[0];
-	thread_current->regs.R5 = oldsp[1];
-	thread_current->regs.R6 = oldsp[2];
-	thread_current->regs.R8 = oldsp[3];
-	thread_current->regs.R9 = oldsp[4];
-	thread_current->regs.R10 = oldsp[5];
-	thread_current->regs.R11 = oldsp[6];
-
-	thread_current->regs.R7 = oldsp[9];
-
-	thread_current->regs.R0 = oldsp[11];
-	thread_current->regs.R1 = oldsp[12];
-	thread_current->regs.R2 = oldsp[13];
-	thread_current->regs.R3 = oldsp[14];
-	thread_current->regs.R12 = oldsp[15];
-	thread_current->regs.LR = oldsp[16];
-	thread_current->regs.PC = oldsp[17];
-	thread_current->regs.PSR = oldsp[18];
-
-	/*
-	 * Determine exception cause and jump to schedule if SysTick
-	 */
-	asm volatile(
-			"mrs R12,XPSR\r\n"
-			"lsl R12,#23\r\n"
-			"lsr R12,#23\r\n"
-			"sub R5,R12,#15\r\n"
-			"cbnz R5,_systick_dont_jump\r\n"
-			"bl kernel_schedule\r\n"
-			"_systick_dont_jump:"
-			: : :
-	);
-
-//	exceptionNumber &= ~0xFFFFFE00;
-//
-//	if (exceptionNumber == 15)
-//	{
-//		// Exception is due to SysTick
-//		// SysTick = 15
-//		// SVCall = 11
-//		kernel_schedule();
-//	}
-
-	switch (thread_current->regs.R0)
+    thread_t* child_thread;
+    switch (thread_current->regs.R0)
 	{
 
 	// Get the thread ID of the calling process
@@ -242,7 +181,88 @@ void svc_interrupt_handler()
 		*((lock_t*) thread_current->regs.R1) = LOCK_UNLOCKED;
 		kernel_schedule();
 		break;
+
+    case SYSCALL_FORK:
+        // Find a free thread slot and clone the thread into it
+        if(thread_fork2(thread_current, &child_thread))
+        {
+            // Set the correct return values
+            child_thread->regs.R0 = 0;
+            thread_current->regs.R0 = child_thread->id;
+        }
+        else
+        {
+            thread_current->regs.R0 = 0;
+        }
+        kernel_run(thread_current);
+        break;
 	}
+}
+
+// Called by SVC
+__attribute__((noreturn))
+void svc_interrupt_handler()
+{
+	// Push the context of the trapping thread
+	asm volatile (
+			"dsb\n\t"
+			"isb\n\t"
+			// Push the remaining registers;
+			// R0,R1,R2,R3,R12,LR,PC+4,xPSR are pushed
+			// R7 is pushed on call entry
+			// Remaining registers are:
+			"push {R4, R5, R6, R8, R9, R10, R11}\n\t"
+			// Save the stack pointer to SP
+			"mov %0,SP"
+			: "=r" (thread_current->regs.SP) : : "memory"
+	);
+
+	//asm volatile("mov SP,%0" : : "r" (kernel_stack) : "memory");
+
+	uint32_t* oldsp = (uint32_t*) thread_current->regs.SP;
+
+	// Adjust the saved stack pointer to sit above the pushed exception frame
+	//thread_current->regs.SP += 0x50;
+	thread_current->regs.SP += 0x4C;
+
+	thread_current->regs.R4 = oldsp[0];
+	thread_current->regs.R5 = oldsp[1];
+	thread_current->regs.R6 = oldsp[2];
+	thread_current->regs.R8 = oldsp[3];
+	thread_current->regs.R9 = oldsp[4];
+	thread_current->regs.R10 = oldsp[5];
+	thread_current->regs.R11 = oldsp[6];
+
+	thread_current->regs.R7 = oldsp[9];
+
+	thread_current->regs.R0 = oldsp[11];
+	thread_current->regs.R1 = oldsp[12];
+	thread_current->regs.R2 = oldsp[13];
+	thread_current->regs.R3 = oldsp[14];
+	thread_current->regs.R12 = oldsp[15];
+	thread_current->regs.LR = oldsp[16];
+	thread_current->regs.PC = oldsp[17];
+	thread_current->regs.PSR = oldsp[18];
+
+	/*
+	 * Determine exception cause and jump to schedule if SysTick
+	 */
+	asm volatile(
+			"mrs R12,XPSR\r\n"
+			"lsl R12,#23\r\n"
+			"lsr R12,#23\r\n"
+			"sub R5,R12,#15\r\n"
+			"cbnz R5,_systick_dont_jump\r\n"
+			"mov R5,systime_ms\r\n"
+			"ldr R4,[R5,#0]\r\n"
+			"add R4,R4,#1\r\n"
+            "str R4,[R5,#0]\r\n"
+			"bl kernel_schedule\r\n"
+			"_systick_dont_jump:"
+			: : :
+	);
+
+    kernel_handle_syscall();
 
 	while (1)
 		;
