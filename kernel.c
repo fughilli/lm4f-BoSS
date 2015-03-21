@@ -13,7 +13,7 @@
 
 #include <stdbool.h>
 
-uint8_t kernel_stack[128] __attribute((aligned(8)));
+//uint8_t kernel_stack[128] __attribute((aligned(8)));
 
 void kernel_schedule();
 
