@@ -10,21 +10,26 @@
 #include "debug_serial.h"
 #include "driverlib/systick.h"
 #include "driverlib/sysctl.h"
+#include "inc/hw_types.h"
+#include "inc/hw_memmap.h"
+#include "inc/hw_sysctl.h"
+#include "inc/hw_nvic.h"
 
 #include <stdbool.h>
 
 //uint8_t kernel_stack[128] __attribute((aligned(8)));
 
-uint32_t systime_ms;
+const char __k_kp_str_hdr[] = "Kernel panic: ";
+const char __k_kp_str_hardfault[] = "hard fault";
+const char __k_kp_str_nmi[] = "non-maskable interrupt";
+const char __k_kp_str_default[] = "unimplemented ISR";
+const char __k_kp_str_nl[] = "\r\n";
+
+tsleep_t systime_ms;
 
 void kernel_schedule();
-
-static void kernel_set_scheduler_freq(uint32_t hz)
-{
-	SysTickPeriodSet(SysCtlClockGet() / hz);
-	SysTickIntEnable();
-	SysTickEnable();
-}
+static void kernel_set_scheduler_freq(uint32_t hz);
+void kernel_assert(bool cond, const char* fstr, uint32_t fstrlen);
 
 void kernel_init()
 {
@@ -36,18 +41,40 @@ void kernel_init()
 
 	systime_ms = 0;
 
-	kernel_set_scheduler_freq(100);
+	int i;
+	for(i = 0; i < MAX_THREADS; i++)
+	{
+		kernel_assert(thread_pos(&thread_table[i]) == i, "thread_pos: incorrect behavior", 100);
+		kernel_assert(thread_valid(&thread_table[i]), "thread_valid: incorrect behavior", 100);
+	}
+
+	kernel_set_scheduler_freq(KERNEL_SCHEDULER_IRQ_FREQ);
+}
+
+__attribute__((noreturn))
+void kernel_panic(const char* kpstr, uint32_t kpstrlen)
+{
+	Serial_puts(__k_kp_str_hdr, sizeof(__k_kp_str_hdr));
+	Serial_puts(kpstr, kpstrlen);
+	Serial_puts(__k_kp_str_nl, sizeof(__k_kp_str_nl));
+
+	while(1)
+		;
+}
+
+void kernel_assert(bool cond, const char* fstr, uint32_t fstrlen)
+{
+	if(!cond)
+		kernel_panic(fstr, fstrlen);
 }
 
 __attribute__((noreturn))
 void kernel_schedule()
 {
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].id == thread_current->id)
-			break;
-	}
+	uint32_t i = thread_pos(thread_current);
+
+	if(i == MAX_THREADS)
+		kernel_panic("kernel_schedule: thread_current not in thread table", 51);
 
 	i++;
 	if (i == MAX_THREADS)
@@ -71,10 +98,6 @@ __attribute__((noreturn))
 void kernel_run(thread_t* thread)
 {
 	thread_current = thread;
-//	volatile registers_t context;
-//	int i;
-//	for(i = 0; i < sizeof(registers_t)/4; i++)
-//		((uint32_t*)&context)[i] = ((uint32_t*)&thread_current->regs)[i];
 
 	asm volatile (
 			"mov SP,%0\n\t"
@@ -97,10 +120,6 @@ void kernel_run(thread_t* thread)
 			"cbz R1,_return_except\n\t"
 			"b _loop_head\n"
 
-			// Push xPSR,PC,LR,R12,R3,R2,R1,R0 onto stack
-
-			//"add SP,$0x2C\n\t"
-
 			// Exception return
 			"_return_except:\n\t"
 			"mov LR,$0xFFFFFFF9\n\t"
@@ -111,11 +130,11 @@ void kernel_run(thread_t* thread)
 		;
 }
 
-static void
-kernel_handle_syscall()
+__attribute__((noreturn))
+static void kernel_handle_syscall()
 {
-    thread_t* child_thread;
-    switch (thread_current->regs.R0)
+	thread_t* child_thread;
+	switch (thread_current->regs.R0)
 	{
 
 	// Get the thread ID of the calling process
@@ -124,7 +143,6 @@ kernel_handle_syscall()
 		kernel_run(thread_current);
 		break;
 
-	default:
 	case SYSCALL_EXIT:
 		thread_kill(thread_current);
 		kernel_schedule();
@@ -149,6 +167,11 @@ kernel_handle_syscall()
 		kernel_run(thread_current);
 		break;
 
+	case SYSCALL_FLUBBER:
+		Serial_puts("Flubber!", 8);
+		kernel_run(thread_current);
+		break;
+
 	case SYSCALL_PUTC:
 		// call low-level IO send function
 		// argument is thread_current->regs.R1
@@ -163,6 +186,7 @@ kernel_handle_syscall()
 
 	case SYSCALL_LOCK:
 		// If the lock is already taken, return 0 and resume the spinlock
+		// TODO: check for nullptr
 		if (*((lock_t*) thread_current->regs.R1))
 		{
 			thread_current->regs.R0 = false;
@@ -182,20 +206,59 @@ kernel_handle_syscall()
 		kernel_schedule();
 		break;
 
-    case SYSCALL_FORK:
-        // Find a free thread slot and clone the thread into it
-        if(thread_fork2(thread_current, &child_thread))
-        {
-            // Set the correct return values
-            child_thread->regs.R0 = 0;
-            thread_current->regs.R0 = child_thread->id;
-        }
-        else
-        {
-            thread_current->regs.R0 = 0;
-        }
-        kernel_run(thread_current);
-        break;
+	case SYSCALL_FORK:
+		// Find a free thread slot and clone the thread into it
+		if (thread_fork2(thread_current, &child_thread))
+		{
+			// Set the correct return values
+			child_thread->regs.R0 = 0;
+			thread_current->regs.R0 = child_thread->id;
+		}
+		else
+		{
+			thread_current->regs.R0 = 0;
+		}
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_SLEEP:
+		if (thread_current->regs.R1 > 0)
+		{
+			thread_current->scnt = thread_current->regs.R0 =
+					(thread_current->regs.R1 / SYSTIME_CYCLES_PER_MS);
+			thread_current->scnt += systime_ms;
+			thread_current->state = T_SLEEPING;
+			kernel_schedule();
+		}
+		else
+		{
+			thread_current->regs.R0 = 0;
+			kernel_run(thread_current);
+		}
+		break;
+	}
+
+	kernel_panic("unknown syscall", 15);
+
+	while(1)
+		;
+
+}
+
+static void kernel_tick_counter(void)
+{
+	systime_ms++;
+
+	int i;
+	for (i = 0; i < MAX_THREADS; i++)
+	{
+		if (thread_table[i].state == T_SLEEPING)
+		{
+			if (systime_ms == thread_table[i].scnt)
+			{
+				thread_table[i].state = T_RUNNABLE;
+			}
+		}
 	}
 }
 
@@ -245,31 +308,36 @@ void svc_interrupt_handler()
 	thread_current->regs.PSR = oldsp[18];
 
 	/*
-	 * Determine exception cause and jump to schedule if SysTick
+	 * Determine exception cause and tick the counter/jump to schedule if SysTick
 	 */
 	asm volatile(
-			"mrs R12,XPSR\r\n"
-			"lsl R12,#23\r\n"
-			"lsr R12,#23\r\n"
-			"sub R5,R12,#15\r\n"
-			"cbnz R5,_systick_dont_jump\r\n"
-			"mov R5,systime_ms\r\n"
-			"ldr R4,[R5,#0]\r\n"
-			"add R4,R4,#1\r\n"
-            "str R4,[R5,#0]\r\n"
-			"bl kernel_schedule\r\n"
+			"mrs R12,XPSR\n\t"
+			"lsl R12,#23\n\t"
+			"lsr R12,#23\n\t"
+			"sub R5,R12,#15\n\t"
+			"cbnz R5,_systick_dont_jump\n\t"
+			"bl kernel_tick_counter\n\t"
+			"bl kernel_schedule\n\t"
 			"_systick_dont_jump:"
 			: : :
 	);
 
-    kernel_handle_syscall();
+	kernel_handle_syscall();
 
 	while (1)
 		;
 }
 
+static void kernel_set_scheduler_freq(uint32_t hz)
+{
+	HWREG( NVIC_ST_CURRENT ) = 0;
+	SysTickPeriodSet(SysCtlClockGet() / hz);
+	SysTickIntRegister(svc_interrupt_handler);
+	SysTickIntEnable();
+	SysTickEnable();
+}
+
 void _exit(int status)
 {
-	while (1)
-		;
+	sys_exit(0);
 }
