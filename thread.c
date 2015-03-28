@@ -36,10 +36,10 @@ static thread_t* tt_entry_for_tid(tid_t id)
  * Find the position of a thread in the thread table from a
  * pointer to that table entry
  */
-static uint32_t thread_pos(const thread_t* thread)
+uint32_t thread_pos(const thread_t* thread)
 {
     if(!thread)
-        return false;
+        return MAX_THREADS;
 
     int pos = (thread - thread_table);
 
@@ -68,7 +68,7 @@ static uint32_t thread_first_empty()
 /**
  * Check if a given thread exists in the thread table
  */
-static bool thread_valid(const thread_t* thread)
+bool thread_valid(const thread_t* thread)
 {
 	return (thread_pos(thread) != MAX_THREADS);
 }
@@ -162,10 +162,10 @@ bool thread_copy(thread_t* dest, const thread_t* src)
     if(tid_counter == 0)
         ++tid_counter;
 
-    thread_table[d_index].id = tid_counter;
-
     fast_memcpy(dest, src, sizeof(thread_t));
     fast_memcpy(thread_mem[d_index], thread_mem[s_index], THREAD_MEM_SIZE);
+
+    thread_table[d_index].id = tid_counter;
 
     return true;
 }

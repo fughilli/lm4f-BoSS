@@ -15,8 +15,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define MAX_THREADS (8)
-#define THREAD_MEM_SIZE (1024)
+#define MAX_THREADS (16)
+#define THREAD_MEM_SIZE (256)
 
 typedef uint32_t tid_t;
 typedef uint32_t tstate_t;
@@ -85,5 +85,7 @@ bool thread_kill2(tid_t tid);
 bool thread_copy(thread_t* dest, const thread_t* src);
 bool thread_fork(thread_t* thread);
 bool thread_fork2(thread_t* thread, thread_t** rthread);
+uint32_t thread_pos(const thread_t* thread);
+bool thread_valid(const thread_t* thread);
 
 #endif /* THREAD_H_ */
