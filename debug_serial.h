@@ -17,7 +17,7 @@ extern "C" {
 void Serial_init();
 void Serial_putc(char c);
 int Serial_getc();
-void Serial_puts(char * s, uint16_t maxlen);
+void Serial_puts(const char * s, uint16_t maxlen);
 
 #ifdef __cplusplus
 }

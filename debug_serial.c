@@ -61,7 +61,7 @@ int Serial_getc()
 	return (int)UARTCharGet(UART0_BASE);
 }
 
-void Serial_puts(char * s, uint16_t maxlen)
+void Serial_puts(const char * s, uint16_t maxlen)
 {
 	uint16_t i;
 	for(i = 0; i < maxlen; i++)
