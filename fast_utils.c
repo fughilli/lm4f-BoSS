@@ -17,3 +17,11 @@ void fast_memset(void* dst, uint8_t val, size_t sz)
         ((uint8_t*)dst)[sz] = val;
     } while(sz);
 }
+
+size_t fast_strlen(const char* str)
+{
+	size_t ret = 0;
+	while(str[ret])
+		ret++;
+	return ret;
+}
