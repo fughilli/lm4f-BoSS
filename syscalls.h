@@ -79,7 +79,7 @@ inline void sys_putc(char c)
 	);
 }
 
-inline uint32_t sys_puts(char* str, uint32_t len)
+inline uint32_t sys_puts(const char* str, uint32_t len)
 {
 	uint32_t writelen;
 	asm volatile (
