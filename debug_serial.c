@@ -72,6 +72,11 @@ void Serial_puts(const char * s, uint16_t maxlen)
 	}
 }
 
+void Serial_flush()
+{
+	while(UARTBusy(UART0_BASE));
+}
+
 //uint8_t Serial_available()
 //{
 //	return((RXBuffer_head >= RXBuffer_tail) ?
