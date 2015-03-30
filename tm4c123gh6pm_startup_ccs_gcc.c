@@ -24,6 +24,7 @@
 
 #include <stdint.h>
 #include "debug_serial.h"
+#include "fast_utils.h"
 
 //*****************************************************************************
 //
@@ -31,11 +32,11 @@
 //
 //*****************************************************************************
 
-const char __k_kp_str_hdr[] = "Kernel panic: ";
-const char __k_kp_str_hardfault[] = "hard fault";
-const char __k_kp_str_nmi[] = "non-maskable interrupt";
-const char __k_kp_str_default[] = "unimplemented ISR";
-const char __k_kp_str_nl[] = "\r\n";
+extern const char __k_kp_str_hdr[];
+extern const char __k_kp_str_hardfault[];
+extern const char __k_kp_str_nmi[];
+extern const char __k_kp_str_default[];
+extern const char __k_kp_str_nl[];
 
 //*****************************************************************************
 //
@@ -323,9 +324,9 @@ NmiSR(void)
     //
     // Enter an infinite loop.
     //
-	Serial_puts(__k_kp_str_hdr, sizeof(__k_kp_str_hdr));
-	Serial_puts(__k_kp_str_nmi, sizeof(__k_kp_str_nmi));
-	Serial_puts(__k_kp_str_nl,sizeof(__k_kp_str_nl));
+	Serial_puts(__k_kp_str_hdr, fast_strlen(__k_kp_str_hdr));
+	Serial_puts(__k_kp_str_nmi, fast_strlen(__k_kp_str_nmi));
+	Serial_puts(__k_kp_str_nl,fast_strlen(__k_kp_str_nl));
 
     while(1)
     {
@@ -345,9 +346,9 @@ FaultISR(void)
     //
     // Enter an infinite loop.
     //
-	Serial_puts(__k_kp_str_hdr,sizeof(__k_kp_str_hdr));
-	Serial_puts(__k_kp_str_hardfault,sizeof(__k_kp_str_hardfault));
-	Serial_puts(__k_kp_str_nl,sizeof(__k_kp_str_nl));
+	Serial_puts(__k_kp_str_hdr,fast_strlen(__k_kp_str_hdr));
+	Serial_puts(__k_kp_str_hardfault,fast_strlen(__k_kp_str_hardfault));
+	Serial_puts(__k_kp_str_nl,fast_strlen(__k_kp_str_nl));
 
     while(1)
     {
@@ -367,9 +368,9 @@ IntDefaultHandler(void)
     //
     // Go into an infinite loop.
     //
-	Serial_puts(__k_kp_str_hdr, sizeof(__k_kp_str_hdr));
-	Serial_puts(__k_kp_str_default, sizeof(__k_kp_str_default));
-	Serial_puts(__k_kp_str_nl,sizeof(__k_kp_str_nl));
+	Serial_puts(__k_kp_str_hdr, fast_strlen(__k_kp_str_hdr));
+	Serial_puts(__k_kp_str_default, fast_strlen(__k_kp_str_default));
+	Serial_puts(__k_kp_str_nl,fast_strlen(__k_kp_str_nl));
 
     while(1)
     {
