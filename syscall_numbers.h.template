@@ -1,0 +1,13 @@
+/*
+ * syscall_numbers.h
+ *
+ *  Created on: Mar 18, 2015
+ *      Author: Kevin
+ */
+
+#ifndef SYSCALL_NUMBERS_H_
+#define SYSCALL_NUMBERS_H_
+
+<~syscall-list~>
+
+#endif /* SYSCALL_NUMBERS_H_ */
