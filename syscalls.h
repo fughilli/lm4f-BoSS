@@ -185,4 +185,12 @@ inline void sys_reset()
 		;
 }
 
+void _exit(int status)
+{
+	sys_exit(0);
+
+	while(1)
+		;
+}
+
 #endif /* SYSCALLS_H_ */

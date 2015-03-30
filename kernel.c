@@ -14,6 +14,7 @@
 #include "inc/hw_memmap.h"
 #include "inc/hw_sysctl.h"
 #include "inc/hw_nvic.h"
+#include "fast_utils.h"
 
 #include <stdbool.h>
 
@@ -24,6 +25,8 @@ const char __k_kp_str_hardfault[] = "hard fault";
 const char __k_kp_str_nmi[] = "non-maskable interrupt";
 const char __k_kp_str_default[] = "unimplemented ISR";
 const char __k_kp_str_nl[] = "\r\n";
+
+const char __k_r_str[] = "Going down for soft reset NOW!";
 
 tsleep_t systime_ms;
 
@@ -236,6 +239,14 @@ static void kernel_handle_syscall()
 			kernel_run(thread_current);
 		}
 		break;
+
+	case SYSCALL_RESET:
+		// Print a reset message and then initiate a software reset
+		Serial_puts(__k_r_str, fast_strlen(__k_r_str));
+		Serial_puts(__k_kp_str_nl, fast_strlen(__k_kp_str_nl));
+		Serial_flush();
+		SysCtlReset();
+		break;
 	}
 
 	kernel_panic("unknown syscall", 15);
@@ -335,9 +346,4 @@ static void kernel_set_scheduler_freq(uint32_t hz)
 	SysTickIntRegister(svc_interrupt_handler);
 	SysTickIntEnable();
 	SysTickEnable();
-}
-
-void _exit(int status)
-{
-	sys_exit(0);
 }
