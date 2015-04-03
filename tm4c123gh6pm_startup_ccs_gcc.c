@@ -324,9 +324,9 @@ NmiSR(void)
     //
     // Enter an infinite loop.
     //
-	Serial_puts(__k_kp_str_hdr, fast_strlen(__k_kp_str_hdr));
-	Serial_puts(__k_kp_str_nmi, fast_strlen(__k_kp_str_nmi));
-	Serial_puts(__k_kp_str_nl,fast_strlen(__k_kp_str_nl));
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_hdr, fast_strlen(__k_kp_str_hdr));
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nmi, fast_strlen(__k_kp_str_nmi));
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nl,fast_strlen(__k_kp_str_nl));
 
     while(1)
     {
@@ -346,9 +346,9 @@ FaultISR(void)
     //
     // Enter an infinite loop.
     //
-	Serial_puts(__k_kp_str_hdr,fast_strlen(__k_kp_str_hdr));
-	Serial_puts(__k_kp_str_hardfault,fast_strlen(__k_kp_str_hardfault));
-	Serial_puts(__k_kp_str_nl,fast_strlen(__k_kp_str_nl));
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_hdr,fast_strlen(__k_kp_str_hdr));
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_hardfault,fast_strlen(__k_kp_str_hardfault));
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nl,fast_strlen(__k_kp_str_nl));
 
     while(1)
     {
@@ -368,9 +368,9 @@ IntDefaultHandler(void)
     //
     // Go into an infinite loop.
     //
-	Serial_puts(__k_kp_str_hdr, fast_strlen(__k_kp_str_hdr));
-	Serial_puts(__k_kp_str_default, fast_strlen(__k_kp_str_default));
-	Serial_puts(__k_kp_str_nl,fast_strlen(__k_kp_str_nl));
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_hdr, fast_strlen(__k_kp_str_hdr));
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_default, fast_strlen(__k_kp_str_default));
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nl,fast_strlen(__k_kp_str_nl));
 
     while(1)
     {
