@@ -13,7 +13,9 @@ thread_t thread_table[MAX_THREADS] __attribute__((aligned(0x4)));
 thread_t* thread_current;
 tid_t tid_counter;
 
-uint8_t thread_mem[MAX_THREADS][THREAD_MEM_SIZE];
+// Needs to be aligned on the size of the thread memory region
+// so that the MPU can be used to protect it
+uint8_t thread_mem[MAX_THREADS][THREAD_MEM_SIZE] __attribute__((aligned(THREAD_MEM_SIZE)));
 
 /**
  * Search the thread table for an entry with a matching pid

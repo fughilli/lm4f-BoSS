@@ -15,8 +15,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define MAX_THREADS (16)
-#define THREAD_MEM_SIZE (256)
+#define MAX_THREADS (8)
+//#define THREAD_MEM_SIZE (512)
+#define LOG2_THREAD_MEM_SIZE (9)
+#define THREAD_MEM_SIZE (1<<LOG2_THREAD_MEM_SIZE)
 
 typedef uint32_t tid_t;
 typedef uint32_t tstate_t;
@@ -77,6 +79,7 @@ typedef struct
 
 extern thread_t thread_table[];
 extern thread_t* thread_current;
+extern uint8_t thread_mem[][THREAD_MEM_SIZE];
 
 void thread_init(void);
 tid_t thread_spawn(void (*entry)(void*), void* arg);
