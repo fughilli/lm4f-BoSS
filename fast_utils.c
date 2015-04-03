@@ -2,6 +2,24 @@
 #include <stdarg.h>
 #include <stdbool.h>
 
+uint8_t alloc_mem[__ALLOC_MEM_SIZE];
+
+// TODO: build an actual allocator.
+
+uint32_t alloc_off = 0;
+
+void* fast_alloc(size_t sz)
+{
+	uint8_t* mem = &alloc_mem[alloc_off];
+	alloc_off += sz;
+	return (void*)mem;
+}
+
+void fast_free(void* buf)
+{
+	; // Do nothing.
+}
+
 void fast_memcpy(void* dst, const void* src, size_t sz)
 {
     do
