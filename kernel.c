@@ -14,11 +14,17 @@
 #include "inc/hw_memmap.h"
 #include "inc/hw_sysctl.h"
 #include "inc/hw_nvic.h"
+#include "inc/hw_gpio.h"
 #include "fast_utils.h"
+#include "driverlib/mpu.h"
+#include "driverlib/gpio.h"
+#include "file.h"
 
 #include <stdbool.h>
 
 //uint8_t kernel_stack[128] __attribute((aligned(8)));
+
+fd_assoc_t file_table[MAX_FILES];
 
 const char __k_kp_str_hdr[] = "Kernel panic: ";
 const char __k_kp_str_hardfault[] = "hard fault";
@@ -29,10 +35,14 @@ const char __k_kp_str_nl[] = "\r\n";
 const char __k_r_str[] = "Going down for soft reset NOW!";
 
 tsleep_t systime_ms;
+tsleep_t next_to_run_ms;
 
 void kernel_schedule();
 static void kernel_set_scheduler_freq(uint32_t hz);
 void kernel_assert(bool cond, const char* fstr, uint32_t fstrlen);
+void kernel_enable_mpu();
+void kernel_set_memory_region(thread_t* thread);
+void kernel_set_memory_region_flash();
 
 void kernel_init()
 {
@@ -43,6 +53,7 @@ void kernel_init()
 	thread_current = &thread_table[0];
 
 	systime_ms = 0;
+	next_to_run_ms = UINT32_MAX;
 
 	int i;
 	for(i = 0; i < MAX_THREADS; i++)
@@ -52,14 +63,64 @@ void kernel_init()
 	}
 
 	kernel_set_scheduler_freq(KERNEL_SCHEDULER_IRQ_FREQ);
+
+	//kernel_enable_mpu();
+	//kernel_set_memory_region_flash();
+	// Have to set flash first, otherwise setting thread mode to unprivileged will result in a hard fault
+	//kernel_set_memory_region(thread_current);
+}
+
+void kernel_enable_mpu()
+{
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_MPU);
+	MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
+
+	//Set thread mode to unprivileged access
+	asm volatile (
+			"mrs R8,CONTROL\n\t"
+			"and R8,R8,$0xFE\n\t"
+			"add R8,R8,$0x01\n\t"
+			"msr CONTROL,R8"
+			);
+}
+
+static uint8_t bitpos(uint32_t mask)
+{
+	uint8_t ret;
+	while(mask)
+	{
+		mask >>= 1;
+		ret++;
+	}
+	return ret;
+}
+
+/**
+ * Setup MPU region 0 to the bounds of the thread stack
+ */
+#define THREAD_MEM_SIZE_MASK ((LOG2_THREAD_MEM_SIZE - 1) << 1)
+void kernel_set_memory_region(thread_t* thread)
+{
+	MPURegionDisable(0);
+	MPURegionSet(0, (uint32_t)thread_mem[thread_pos(thread)], THREAD_MEM_SIZE_MASK | MPU_RGN_PERM_PRV_RW_USR_RW | MPU_RGN_PERM_NOEXEC);
+	MPURegionEnable(0);
+}
+
+/**
+ * Setup MPU region 1 to the bounds of the system flash
+ */
+void kernel_set_memory_region_flash()
+{
+	MPURegionDisable(1);
+	MPURegionSet(1, 0, (15<1) | MPU_RGN_PERM_EXEC | MPU_RGN_PERM_PRV_RO_USR_RO);
 }
 
 __attribute__((noreturn))
 void kernel_panic(const char* kpstr, uint32_t kpstrlen)
 {
-	Serial_puts(__k_kp_str_hdr, sizeof(__k_kp_str_hdr));
-	Serial_puts(kpstr, kpstrlen);
-	Serial_puts(__k_kp_str_nl, sizeof(__k_kp_str_nl));
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_hdr, sizeof(__k_kp_str_hdr));
+	Serial_puts(UART_DEBUG_MODULE, kpstr, kpstrlen);
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nl, sizeof(__k_kp_str_nl));
 
 	while(1)
 		;
@@ -101,6 +162,8 @@ __attribute__((noreturn))
 void kernel_run(thread_t* thread)
 {
 	thread_current = thread;
+
+	kernel_set_memory_region(thread_current);
 
 	asm volatile (
 			"mov SP,%0\n\t"
@@ -165,25 +228,20 @@ static void kernel_handle_syscall()
 		kernel_run(thread_current);
 		break;
 
-	case SYSCALL_SET_PORT_DIRS:
-		//SysCtlPeripheralEnable(GPIO)
-		kernel_run(thread_current);
-		break;
-
 	case SYSCALL_FLUBBER:
-		Serial_puts("Flubber!", 8);
+		Serial_puts(UART_DEBUG_MODULE, "Flubber!", 8);
 		kernel_run(thread_current);
 		break;
 
 	case SYSCALL_PUTC:
 		// call low-level IO send function
 		// argument is thread_current->regs.R1
-		Serial_putc(thread_current->regs.R1);
+		Serial_putc(UART_DEBUG_MODULE, thread_current->regs.R1);
 		kernel_run(thread_current);
 		break;
 
 	case SYSCALL_PUTS:
-		Serial_puts((char*) thread_current->regs.R1, thread_current->regs.R2);
+		Serial_puts(UART_DEBUG_MODULE, (char*) thread_current->regs.R1, thread_current->regs.R2);
 		kernel_run(thread_current);
 		break;
 
@@ -229,7 +287,12 @@ static void kernel_handle_syscall()
 		{
 			thread_current->scnt = thread_current->regs.R0 =
 					(thread_current->regs.R1 / SYSTIME_CYCLES_PER_MS);
+
 			thread_current->scnt += systime_ms;
+
+			if((thread_current->scnt - systime_ms) < (next_to_run_ms - systime_ms))
+				next_to_run_ms = thread_current->scnt;
+
 			thread_current->state = T_SLEEPING;
 			kernel_schedule();
 		}
@@ -242,10 +305,52 @@ static void kernel_handle_syscall()
 
 	case SYSCALL_RESET:
 		// Print a reset message and then initiate a software reset
-		Serial_puts(__k_r_str, fast_strlen(__k_r_str));
-		Serial_puts(__k_kp_str_nl, fast_strlen(__k_kp_str_nl));
-		Serial_flush();
+		Serial_puts(UART_DEBUG_MODULE, __k_r_str, fast_strlen(__k_r_str));
+		Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nl, fast_strlen(__k_kp_str_nl));
+		Serial_flush(UART_DEBUG_MODULE);
 		SysCtlReset();
+		break;
+
+	case SYSCALL_SET_PORT_DIRS:
+		GPIOPinTypeGPIOOutput(thread_current->regs.R1, thread_current->regs.R2);
+		//GPIOPinTypeGPIOInput(thread_current->regs.R1, ~thread_current->regs.R2);
+		//HWREG(thread_current->regs.R1 + GPIO_O_DIR) = (HWREG(thread_current->regs.R1 + GPIO_O_DIR) & 0xFFFFFF00) | (thread_current->regs.R2 & 0xFF);
+		//HWREG(thread_current->regs.R1 + GPIO_O_AFSEL) &= ~0xFF;
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_WRITE_PORT:
+		GPIOPinWrite(thread_current->regs.R1, thread_current->regs.R2, thread_current->regs.R3);
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_READ_PORT:
+		thread_current->regs.R0 = GPIOPinRead(thread_current->regs.R1, 0xFF);
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_READ:
+		thread_current->regs.R0 = (uint32_t) read(
+				(fd_t) thread_current->regs.R1,
+				(uint8_t*) thread_current->regs.R2,
+				(int32_t) thread_current->regs.R3);
+		kernel_schedule();
+		break;
+
+	case SYSCALL_WRITE:
+		thread_current->regs.R0 = (uint32_t) write(
+				(fd_t) thread_current->regs.R1,
+				(const uint8_t*) thread_current->regs.R2,
+				(int32_t) thread_current->regs.R3);
+		kernel_schedule();
+		break;
+
+	case SYSCALL_IOCTL:
+		thread_current->regs.R0 = (uint32_t) ioctl(
+						(fd_t) thread_current->regs.R1,
+						(uint32_t) thread_current->regs.R2,
+						(void*) thread_current->regs.R3);
+		kernel_schedule();
 		break;
 	}
 
@@ -260,17 +365,38 @@ static void kernel_tick_counter(void)
 {
 	systime_ms++;
 
+	if(systime_ms != next_to_run_ms)
+		return;
+
+	next_to_run_ms = UINT32_MAX;
+
 	int i;
 	for (i = 0; i < MAX_THREADS; i++)
 	{
 		if (thread_table[i].state == T_SLEEPING)
 		{
+			// If this tick is the thread's wakeup time
 			if (systime_ms == thread_table[i].scnt)
 			{
+				// Wake it up
 				thread_table[i].state = T_RUNNABLE;
+			}
+			// If this is not the thread's wakeup time
+			// sort wakeup times to determine next runtime
+			else
+			{
+				// Normalize the time (modulo UINT32_MAX + 1)
+				tsleep_t normtime = thread_table[i].scnt - systime_ms;
+				if(normtime < next_to_run_ms)
+				{
+					next_to_run_ms = normtime;
+				}
 			}
 		}
 	}
+
+	// Denormalize (relative to current systime_ms)
+	next_to_run_ms += systime_ms;
 }
 
 // Called by SVC
