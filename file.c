@@ -6,24 +6,47 @@
  */
 
 #include "file.h"
+#include "fast_utils.h"
 
-fd_assoc_t* file_table;
+#define CALL_IF_VALID(_fptr_, ...) if((_fptr_)){(_fptr_)(__VA_ARGS__);}
+#define CALLRET_IF_VALID(_fptr_, ...) if((_fptr_)){return (_fptr_)(__VA_ARGS__);}
 
 const fd_funmap_t file_funmap =
 {
 		.close = file_close,
 		.read = file_read,
-		.write = file_write
+		.write = file_write,
+		.seek = file_seek,
+		.ioctl = NULL
 };
 
-#define FD_VALID(_fd_) ((_fd_) >= 0 && (_fd_) < MAX_FILES)
+fd_t ftable_getfree()
+{
+	fd_t i;
+	for (i = 0; i < MAX_FILES; i++)
+	{
+		if(file_table[i].funmap == NULL)
+			return i;
+	}
+
+	return FD_INVALID;
+}
+
+void ftable_free(fd_t fd)
+{
+	if(FD_VALID(fd))
+		file_table[fd].funmap = NULL;
+}
 
 void close(fd_t fd)
 {
 	if (!FD_VALID(fd))
 		return;
 
-	file_table[fd].funmap->close(fd);
+//	if(file_table[fd].funmap->close)
+//		file_table[fd].funmap->close(fd);
+
+	CALL_IF_VALID(file_table[fd].funmap->close, fd);
 }
 
 int32_t read(fd_t fd, uint8_t* buf, int32_t len)
@@ -31,15 +54,39 @@ int32_t read(fd_t fd, uint8_t* buf, int32_t len)
 	if (!FD_VALID(fd))
 		return RW_INVALID;
 
-	return file_table[fd].funmap->read(fd, buf, len);
+	CALLRET_IF_VALID(file_table[fd].funmap->read, fd, buf, len);
+
+	return RW_INVALID;
 }
 
-int32_t write(fd_t fd, uint8_t* buf, int32_t len)
+int32_t write(fd_t fd, const uint8_t* buf, int32_t len)
 {
 	if (!FD_VALID(fd))
 		return RW_INVALID;
 
-	return file_table[fd].funmap->write(fd, buf, len);
+	CALLRET_IF_VALID(file_table[fd].funmap->write, fd, buf, len);
+
+		return RW_INVALID;
+}
+
+int32_t seek(fd_t fd, int32_t pos)
+{
+	if (!FD_VALID(fd))
+			return RW_INVALID;
+
+		CALLRET_IF_VALID(file_table[fd].funmap->seek, fd, pos);
+
+			return SEEK_INVALID;
+}
+
+uint32_t ioctl(fd_t fd, uint32_t mask, void* arg)
+{
+	if (!FD_VALID(fd))
+			return RW_INVALID;
+
+		CALLRET_IF_VALID(file_table[fd].funmap->ioctl, fd, mask, arg);
+
+			return IOCTL_INVALID;
 }
 
 fd_t file_open(const char* fname, uint32_t mode, uint32_t flags)
@@ -57,7 +104,12 @@ int32_t file_read(fd_t fd, uint8_t* buf, int32_t len)
 	return RW_INVALID;
 }
 
-int32_t file_write(fd_t fd, uint8_t* buf, int32_t len)
+int32_t file_write(fd_t fd, const uint8_t* buf, int32_t len)
 {
 	return RW_INVALID;
+}
+
+int32_t file_seek(fd_t fd, int32_t pos)
+{
+	return SEEK_INVALID;
 }
