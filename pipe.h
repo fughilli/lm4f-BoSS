@@ -28,6 +28,6 @@ fd_t pipe_create(size_t bufsiz);
 void pipe_close(fd_t fd);
 
 int32_t pipe_read(fd_t fd, uint8_t* buf, int32_t len);
-int32_t pipe_write(fd_t fd, uint8_t* buf, int32_t len);
+int32_t pipe_write(fd_t fd, const uint8_t* buf, int32_t len);
 
 #endif /* PIPE_H_ */
