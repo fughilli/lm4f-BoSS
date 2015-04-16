@@ -8,6 +8,7 @@
 #ifndef SHELL_H_
 #define SHELL_H_
 
+#include "osprogram.h"
 #include <stdbool.h>
 
 #define SHELL_LINE_BUFFER_SIZE (128)

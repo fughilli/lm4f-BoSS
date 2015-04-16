@@ -7,9 +7,7 @@
 
 #include "shell.h"
 #include <stdint.h>
-#include "fast_utils.h"
-#include "debug_serial.h"
-#include "thread.h"
+#include "../debug_serial.h"
 
 const uint8_t _bsp_seq[] = {SHELL_BACKSPACE, ' ', SHELL_BACKSPACE};
 
@@ -22,10 +20,6 @@ char* shell_argBuffer[SHELL_MAX_ARGS];
 
 const char shell_error_too_many_args[] = "Parse error: too many arguments!";
 const char shell_error_unknown_command[] = "Error: unknown command \'";
-
-extern inline uint32_t sys_sleep(uint32_t ms);
-extern inline void sys_exit(uint32_t ms);
-inline tid_t sys_spawn(void (*entry)(void*), void* arg);
 
 void shell_processLine(void);
 
@@ -145,10 +139,16 @@ typedef struct
 	int argc;
 } shell_run_shim_params_t;
 
+lock_t shim_print_lock = LOCK_UNLOCKED;
+
 void shell_run_shim(void* arg)
 {
 	shell_run_shim_params_t* shimparams = ((shell_run_shim_params_t*)arg);
-	sys_exit(shimparams->func(shimparams->argv, shimparams->argc));
+	int ret = shimparams->func(shimparams->argv, shimparams->argc);
+
+	sys_unlock(&shim_print_lock);
+
+	sys_exit(ret);
 }
 
 void shell_processLine(void)
@@ -185,7 +185,13 @@ void shell_processLine(void)
     	shim_params.argc = shell_argIndex;
     	shim_params.argv = shell_argBuffer;
 
+    	while(!sys_lock(&shim_print_lock))
+    		sys_sleep(10);
+
     	sys_spawn(shell_run_shim, &shim_params);
+
+    	while(shim_print_lock)
+    		sys_sleep(10);
     }
     else
     {
