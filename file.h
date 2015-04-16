@@ -28,7 +28,7 @@ typedef int32_t fd_t;
 #define FFLAG_TRUNC 0x00000004
 //#define FFLAG_OVERW
 
-#define FD_VALID(_fd_) ((_fd_) >= 0 && (_fd_) < MAX_FILES)
+#define FD_VALID(_fd_) (((_fd_) >= 0) && ((_fd_) < MAX_FILES) && (file_table[(_fd_)].funmap))
 
 typedef struct
 {
@@ -54,6 +54,7 @@ extern fd_assoc_t file_table[MAX_FILES];
 
 fd_t ftable_getfree();
 void ftable_free(fd_t);
+void ftable_init();
 
 // Top-level functions for manipulating "files";
 // Any device modeled as a file is operated upon

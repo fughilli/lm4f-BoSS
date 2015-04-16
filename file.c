@@ -20,6 +20,15 @@ const fd_funmap_t file_funmap =
 		.ioctl = NULL
 };
 
+void ftable_init()
+{
+	fd_t i;
+	for (i = 0; i < MAX_FILES; i++)
+	{
+		file_table[i].funmap = NULL;
+	}
+}
+
 fd_t ftable_getfree()
 {
 	fd_t i;
