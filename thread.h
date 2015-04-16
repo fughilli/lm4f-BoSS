@@ -36,6 +36,8 @@ enum
 	T_RUNNABLE, T_BLOCKED, T_ZOMBIE, T_SLEEPING
 };
 
+#define THREAD_SAVED_REGISTERS_NUM (17)
+
 typedef struct
 {
 	uint32_t R4;

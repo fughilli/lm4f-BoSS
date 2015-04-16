@@ -255,6 +255,21 @@ inline uint32_t sys_ioctl(fd_t fd, uint32_t mask, void* arg)
 	return ret;
 }
 
+inline tid_t sys_spawn(void (*entry)(void*), void* arg)
+{
+	tid_t ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"mov R2,%3\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) :
+			"r" (SYSCALL_SPAWN), "r" (entry), "r" (arg) : "memory", "0", "1", "2", "3"
+	);
+	return ret;
+}
+
 
 __attribute__((noreturn()))
 inline void sys_exit(int status)

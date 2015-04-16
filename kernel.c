@@ -19,6 +19,7 @@
 #include "driverlib/mpu.h"
 #include "driverlib/gpio.h"
 #include "file.h"
+#include "os_config.h"
 
 #include <stdbool.h>
 
@@ -34,6 +35,26 @@ const char __k_kp_str_nl[] = "\r\n";
 
 const char __k_r_str[] = "Going down for soft reset NOW!";
 
+const char __k_kp_str_regtrace[] = "Registers before fault:\r\n";
+
+const char __k_kp_str_regnames[THREAD_SAVED_REGISTERS_NUM][4] =
+{
+		"SP ", "R0 ", "R1 ", "R2 ",
+		"R3 ", "R4 ", "R5 ", "R6 ",
+		"R7 ", "R8 ", "R9 ", "R10",
+		"R11", "R12", "LR ", "PC ",
+		"PSR"
+};
+
+const uint8_t __k_reg_sp_offsets[THREAD_SAVED_REGISTERS_NUM] =
+{
+		0, 11, 12, 13,
+		14, 0, 1, 2,
+		9, 3, 4, 5,
+		6, 15, 16, 17,
+		18
+};
+
 tsleep_t systime_ms;
 tsleep_t next_to_run_ms;
 
@@ -47,6 +68,8 @@ void kernel_set_memory_region_flash();
 void kernel_init()
 {
 	thread_init();
+
+	ftable_init();
 
 	thread_table[0].state = T_RUNNABLE;
 	thread_table[0].id = 0;
@@ -64,15 +87,19 @@ void kernel_init()
 
 	kernel_set_scheduler_freq(KERNEL_SCHEDULER_IRQ_FREQ);
 
-	//kernel_enable_mpu();
-	//kernel_set_memory_region_flash();
+#if MEMORY_PROTECTION
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_MPU);
+
+	kernel_set_memory_region_flash();
 	// Have to set flash first, otherwise setting thread mode to unprivileged will result in a hard fault
-	//kernel_set_memory_region(thread_current);
+	kernel_set_memory_region(thread_current);
+
+	kernel_enable_mpu();
+#endif
 }
 
 void kernel_enable_mpu()
 {
-	SysCtlPeripheralEnable(SYSCTL_PERIPH_MPU);
 	MPUEnable(MPU_CONFIG_PRIV_DEFAULT);
 
 	//Set thread mode to unprivileged access
@@ -101,7 +128,7 @@ static uint8_t bitpos(uint32_t mask)
 #define THREAD_MEM_SIZE_MASK ((LOG2_THREAD_MEM_SIZE - 1) << 1)
 void kernel_set_memory_region(thread_t* thread)
 {
-	MPURegionDisable(0);
+	//MPURegionDisable(0);
 	MPURegionSet(0, (uint32_t)thread_mem[thread_pos(thread)], THREAD_MEM_SIZE_MASK | MPU_RGN_PERM_PRV_RW_USR_RW | MPU_RGN_PERM_NOEXEC);
 	MPURegionEnable(0);
 }
@@ -111,8 +138,9 @@ void kernel_set_memory_region(thread_t* thread)
  */
 void kernel_set_memory_region_flash()
 {
-	MPURegionDisable(1);
-	MPURegionSet(1, 0, (15<1) | MPU_RGN_PERM_EXEC | MPU_RGN_PERM_PRV_RO_USR_RO);
+	//MPURegionDisable(1);
+	MPURegionSet(1, 0, MPU_RGN_PERM_EXEC | MPU_RGN_PERM_PRV_RO_USR_RO | MPU_RGN_SIZE_256K);
+	MPURegionEnable(1);
 }
 
 __attribute__((noreturn))
@@ -350,6 +378,13 @@ static void kernel_handle_syscall()
 						(fd_t) thread_current->regs.R1,
 						(uint32_t) thread_current->regs.R2,
 						(void*) thread_current->regs.R3);
+		kernel_schedule();
+		break;
+
+	case SYSCALL_SPAWN:
+		thread_current->regs.R0 = (uint32_t) thread_spawn(
+				(void(*)(void*)) thread_current->regs.R1,
+				(void*) thread_current->regs.R2);
 		kernel_schedule();
 		break;
 	}

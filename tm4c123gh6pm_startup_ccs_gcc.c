@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include "debug_serial.h"
 #include "fast_utils.h"
+#include "thread.h"
 
 //*****************************************************************************
 //
@@ -37,6 +38,9 @@ extern const char __k_kp_str_hardfault[];
 extern const char __k_kp_str_nmi[];
 extern const char __k_kp_str_default[];
 extern const char __k_kp_str_nl[];
+extern const char __k_kp_str_regtrace[];
+extern const char __k_kp_str_regnames[][4];
+extern const uint8_t __k_reg_sp_offsets[];
 
 //*****************************************************************************
 //
@@ -305,10 +309,41 @@ ResetISR(void)
     //
     HWREG(0xE000ED88) = ((HWREG(0xE000ED88) & ~0x00F00000) | 0x00F00000);
 
+    // Set the stack pointer to the top of thread 0 memory
+    asm volatile (
+    		"mov R0,%0\n\t"
+    		"mov SP,R0"
+    		: : "r" ((uint32_t)&thread_mem[1][0]) : );
+
     //
     // Call the application's entry point.
     //
     main();
+}
+
+void dump_core(uint32_t* saved_sp)
+{
+	char regvalbuf[32];
+
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_regtrace,
+			fast_strlen(__k_kp_str_regtrace));
+
+	Serial_putc(UART_DEBUG_MODULE, '\t');
+	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_regnames[0],
+			fast_strlen(__k_kp_str_regnames[0]));
+	fast_snprintf(regvalbuf, 32, ":= 0x%x\n\r", (uint32_t) saved_sp);
+	Serial_puts(UART_DEBUG_MODULE, regvalbuf, fast_strlen(regvalbuf));
+
+	uint32_t i;
+	for (i = 1; i < (THREAD_SAVED_REGISTERS_NUM); i++)
+	{
+		Serial_putc(UART_DEBUG_MODULE, '\t');
+		Serial_puts(UART_DEBUG_MODULE, __k_kp_str_regnames[i],
+				fast_strlen(__k_kp_str_regnames[i]));
+		fast_snprintf(regvalbuf, 32, ":= 0x%x\n\r",
+				saved_sp[__k_reg_sp_offsets[i]]);
+		Serial_puts(UART_DEBUG_MODULE, regvalbuf, fast_strlen(regvalbuf));
+	}
 }
 
 //*****************************************************************************
@@ -321,12 +356,29 @@ ResetISR(void)
 static void
 NmiSR(void)
 {
+	uint32_t* saved_sp;
+	// Push the context of the trapping thread
+	asm volatile (
+			"dsb\n\t"
+			"isb\n\t"
+			// Push the remaining registers;
+			// R0,R1,R2,R3,R12,LR,PC+4,xPSR are pushed
+			// R7 is pushed on call entry
+			// Remaining registers are:
+			"push {R4, R5, R6, R8, R9, R10, R11}\n\t"
+			// Save the stack pointer to SP
+			"mov %0,SP"
+			: "=r" (saved_sp) : : "memory"
+	);
+
     //
     // Enter an infinite loop.
     //
 	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_hdr, fast_strlen(__k_kp_str_hdr));
 	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nmi, fast_strlen(__k_kp_str_nmi));
 	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nl,fast_strlen(__k_kp_str_nl));
+
+	dump_core(saved_sp);
 
     while(1)
     {
@@ -343,13 +395,49 @@ NmiSR(void)
 static void
 FaultISR(void)
 {
-    //
-    // Enter an infinite loop.
-    //
+	uint32_t* saved_sp;
+	// Push the context of the trapping thread
+	asm volatile (
+			"dsb\n\t"
+			"isb\n\t"
+			// Push the remaining registers;
+			// R0,R1,R2,R3,R12,LR,PC+4,xPSR are pushed
+			// R7 is pushed on call entry
+			// Remaining registers are:
+			"push {R4, R5, R6, R8, R9, R10, R11}\n\t"
+			// Save the stack pointer to SP
+			"mov %0,SP"
+			: "=r" (saved_sp) : : "memory"
+	);
+
 	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_hdr,fast_strlen(__k_kp_str_hdr));
 	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_hardfault,fast_strlen(__k_kp_str_hardfault));
 	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nl,fast_strlen(__k_kp_str_nl));
 
+	dump_core(saved_sp);
+
+	// R4 = oldsp[0];
+	// R5 = oldsp[1];
+	// R6 = oldsp[2];
+	// R8 = oldsp[3];
+	// R9 = oldsp[4];
+	// R10 = oldsp[5];
+	// R11 = oldsp[6];
+
+	// R7 = oldsp[9];
+
+	// R0 = oldsp[11];
+	// R1 = oldsp[12];
+	// R2 = oldsp[13];
+	// R3 = oldsp[14];
+	// R12 = oldsp[15];
+	// LR = oldsp[16];
+	// PC = oldsp[17];
+	// PSR = oldsp[18];
+
+	//
+	// Enter an infinite loop.
+	//
     while(1)
     {
     }
@@ -365,12 +453,29 @@ FaultISR(void)
 static void
 IntDefaultHandler(void)
 {
+	uint32_t* saved_sp;
+	// Push the context of the trapping thread
+	asm volatile (
+			"dsb\n\t"
+			"isb\n\t"
+			// Push the remaining registers;
+			// R0,R1,R2,R3,R12,LR,PC+4,xPSR are pushed
+			// R7 is pushed on call entry
+			// Remaining registers are:
+			"push {R4, R5, R6, R8, R9, R10, R11}\n\t"
+			// Save the stack pointer to SP
+			"mov %0,SP"
+			: "=r" (saved_sp) : : "memory"
+	);
+
     //
     // Go into an infinite loop.
     //
 	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_hdr, fast_strlen(__k_kp_str_hdr));
 	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_default, fast_strlen(__k_kp_str_default));
 	Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nl,fast_strlen(__k_kp_str_nl));
+
+	dump_core(saved_sp);
 
     while(1)
     {
