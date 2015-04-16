@@ -53,6 +53,8 @@ fd_t ATOMIC pipe_create(size_t bufsiz)
 	// Set up the file_table entry
 	file_table[pfd].fdata = (void*)&ps;
 	file_table[pfd].funmap = &pipe_funmap;
+
+	return pfd;
 }
 
 //TODO: Some error checking here
@@ -75,7 +77,7 @@ int32_t pipe_read(fd_t fd, uint8_t* buf, int32_t len)
 
 	int32_t oidx = 0;
 
-	for(; len > 0 && ((ps->head + 1) != ps->tail); len--)
+	for(; len > 0 && ((ps->head) != ps->tail); len--)
 	{
 		buf[oidx++] = ps->buf[ps->head++];
 		if(ps->head == ps->bufsiz)
