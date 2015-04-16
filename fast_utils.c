@@ -27,11 +27,36 @@ void fast_free(void* buf)
 
 void fast_memcpy(void* dst, const void* src, size_t sz)
 {
+    if(dst == src || sz == 0)
+        return;
+
     do
     {
         --sz;
         ((uint8_t*)dst)[sz] = ((uint8_t*)src)[sz];
     } while(sz);
+}
+
+void fast_memmove(void* dst, const void* src, size_t sz)
+{
+    size_t iter = 0;
+
+    if(dst == src || sz == 0)
+        return;
+
+    if(dst > src)
+        do
+        {
+            --sz;
+            ((uint8_t*)dst)[sz] = ((uint8_t*)src)[sz];
+        }
+        while(sz);
+    else
+        do
+        {
+            ((uint8_t*)dst)[iter] = ((uint8_t*)src)[iter];
+        }
+        while(iter++ < sz);
 }
 
 void fast_memset(void* dst, uint8_t val, size_t sz)
@@ -305,7 +330,23 @@ double fast_sntod(const char* str, size_t sz, unsigned int base, bool* succ)
 	return ret;
 }
 
-static int snfmtui(char* buf, size_t bufsiz, unsigned long i, unsigned long base)
+unsigned long fast_nextmulof(unsigned long val, unsigned long q)
+{
+	// base cases
+	if(q == 0)
+		return 0;
+	if(q == 1)
+		return val;
+
+	unsigned long modulo = val % q;
+
+	if(modulo == 0)
+		return val;
+
+	return (val - modulo) + q;
+}
+
+int fast_snfmtui(char* buf, size_t bufsiz, unsigned long i, unsigned long base)
 {
     if(bufsiz == 0 || base > MAX_BASE)
         return 0;
@@ -352,14 +393,14 @@ static int snfmtui(char* buf, size_t bufsiz, unsigned long i, unsigned long base
     return ret;
 }
 
-static int snfmti(char* buf, size_t bufsiz, long i, unsigned long base)
+int fast_snfmti(char* buf, size_t bufsiz, long i, unsigned long base)
 {
     if(i < 0)
     {
         buf[0] = '-';
-        return snfmtui(buf+1, bufsiz-1, -i, base)+1;
+        return fast_snfmtui(buf+1, bufsiz-1, -i, base)+1;
     }
-    return snfmtui(buf, bufsiz, i, base);
+    return fast_snfmtui(buf, bufsiz, i, base);
 }
 
 __attribute__((format(printf,3,4)))
@@ -372,6 +413,10 @@ void fast_snprintf(char* buf, size_t bufsiz, const char* fmt, ...)
 	size_t fmtpos = 0;
 
 	size_t fmtlen = fast_strlen(fmt);
+
+	size_t precision = 0;
+
+	bool padwzeros = false;
 
 	bool sym_unsigned = false;
 
@@ -387,6 +432,29 @@ void fast_snprintf(char* buf, size_t bufsiz, const char* fmt, ...)
 				return;
 			}
 
+			size_t stofprec = fmtpos;
+
+			while('0' <= fmt[fmtpos] && fmt[fmtpos] <= '9')
+            {
+                if(fmt[fmtpos] == '0' && !padwzeros)
+                {
+                    padwzeros = true;
+                    fmtpos++;
+                    stofprec++;
+                    continue;
+                }
+
+                fmtpos++;
+            }
+
+            bool succ;
+
+            precision = fast_sntoul(&fmt[stofprec], fmtpos - stofprec, 10, &succ);
+            if(!succ)
+            {
+                precision = 0;
+            }
+
 			_match_fchar:
 			switch(fmt[fmtpos])
 			{
@@ -397,6 +465,7 @@ void fast_snprintf(char* buf, size_t bufsiz, const char* fmt, ...)
 			case 'u':
 				// This symbol is unsigned
 				sym_unsigned = true;
+				fmtpos++;
 				goto _match_fchar;
 			case 'd':
 			case 'x':
@@ -408,6 +477,7 @@ void fast_snprintf(char* buf, size_t bufsiz, const char* fmt, ...)
 					base = 10;
 					break;
 				case 'x':
+				    sym_unsigned = true;
 					base = 16;
 					break;
 				}
@@ -416,14 +486,50 @@ void fast_snprintf(char* buf, size_t bufsiz, const char* fmt, ...)
 				{
 					unsigned long argval;
 					argval = va_arg(ap, unsigned long);
-					bufpos += snfmtui(&buf[bufpos], bufsiz-bufpos, argval, base);
+					if(!precision)
+                        bufpos += fast_snfmtui(&buf[bufpos], bufsiz-bufpos, argval, base);
+                    else
+                    {
+                        size_t intstrsiz = fast_snfmtui(&buf[bufpos], bufsiz-bufpos, argval, base);
+                        if(intstrsiz < precision)
+                        {
+                            if((bufsiz-bufpos) >= precision)
+                            {
+                                fast_memmove(&buf[bufpos + (precision - intstrsiz)], &buf[bufpos], intstrsiz);
+                                fast_memset(&buf[bufpos], (uint8_t)((padwzeros)?('0'):(' ')), precision-intstrsiz);
+                                bufpos += precision;
+                            }
+                            else
+                                break;
+                        }
+                        else
+                            bufpos += intstrsiz;
+                    }
 					sym_unsigned = false;
 				}
 				else
 				{
 					long argval;
 					argval = va_arg(ap, long);
-					bufpos += snfmti(&buf[bufpos], bufsiz-bufpos, argval, base);
+					if(!precision)
+                        bufpos += fast_snfmti(&buf[bufpos], bufsiz-bufpos, argval, base);
+                    else
+                    {
+                        size_t intstrsiz = fast_snfmti(&buf[bufpos], bufsiz-bufpos, argval, base);
+                        if(intstrsiz < precision)
+                        {
+                            if((bufsiz-bufpos) >= precision)
+                            {
+                                fast_memmove(&buf[bufpos + (precision - intstrsiz)], &buf[bufpos], intstrsiz);
+                                fast_memset(&buf[bufpos], (uint8_t)((padwzeros)?('0'):(' ')), precision-intstrsiz);
+                                bufpos += precision;
+                            }
+                            else
+                                break;
+                        }
+                        else
+                            bufpos += intstrsiz;
+                    }
 				}
 				fmtpos++;
 				continue;
@@ -439,3 +545,4 @@ void fast_snprintf(char* buf, size_t bufsiz, const char* fmt, ...)
 
 	va_end(ap);
 }
+
