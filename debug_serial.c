@@ -115,6 +115,11 @@ void Serial_putc(uint8_t module, char c)
 	UARTCharPut(uart_bases[module], c);
 }
 
+bool Serial_avail(uint8_t module)
+{
+	return UARTCharsAvail(uart_bases[module]);
+}
+
 int Serial_getc(uint8_t module)
 {
 	if (!UARTCharsAvail(uart_bases[module]))

@@ -9,6 +9,7 @@
 #define DEBUG_SERIAL_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,6 +32,7 @@ int Serial_getc(uint8_t module);
 void Serial_puts(uint8_t module, const char * s, uint16_t maxlen);
 void Serial_writebuf(uint8_t module, const uint8_t* buf, uint32_t len);
 void Serial_flush(uint8_t module);
+bool Serial_avail(uint8_t module);
 
 #ifdef __cplusplus
 }
