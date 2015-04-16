@@ -8,6 +8,11 @@ uint8_t alloc_mem[__ALLOC_MEM_SIZE];
 
 uint32_t alloc_off = 0;
 
+#define MAX_BASE (16)
+const char __arb_base_digits[] = "0123456789ABCDEF"; //"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";
+
+#define __digits_val_rev_lookup(_digit_) ((((_digit_) >= '0')&&((_digit_) <= '9'))?((_digit_)-'0'):((((_digit_) >= 'A')&&((_digit_) <= 'F'))?((_digit_)-('A'-10)):(-1)))
+
 void* fast_alloc(size_t sz)
 {
 	uint8_t* mem = &alloc_mem[alloc_off];
@@ -46,16 +51,270 @@ size_t fast_strlen(const char* str)
 	return ret;
 }
 
-static int snfmtui(char* buf, size_t bufsiz, unsigned long i)
+int fast_memcmp(const void* ptr1, const void* ptr2, size_t sz)
 {
-    if(bufsiz == 0)
+	int8_t *a, *b;
+	a = (int8_t*)ptr1;
+	b = (int8_t*)ptr2;
+	int ret = 0;
+
+	while(sz && (ret == 0))
+	{
+		sz--;
+		ret += (*a);
+		ret -= (*b);
+	}
+
+	return ret;
+}
+
+size_t fast_strcpy(char* stra, const char* strb)
+{
+	size_t ret = fast_strlen(strb);
+	fast_memcpy(stra, strb, ret);
+	return ret;
+}
+
+int fast_strcmp(char* stra, const char* strb)
+{
+	int ret = 0;
+	while ((ret == 0) && (*stra) && (*strb))
+	{
+		ret += (*stra);
+		ret -= (*strb);
+		stra++;
+		strb++;
+	}
+	return ret;
+}
+
+long fast_sntol(const char* str, size_t sz, unsigned int base, bool* succ)
+{
+	long ret = 0;
+
+	size_t i = 0;
+	bool sign = false;
+
+	if (succ)
+	{
+		(*succ) = false;
+	}
+
+	if (base > MAX_BASE || sz == 0)
+		return 0;
+
+	if (sz >= 2 && str[0] == '-')
+	{
+		sign = true;
+		i = 1;
+	}
+
+	for (; i < sz; i++)
+	{
+		int16_t charval = __digits_val_rev_lookup(str[i]);
+		if (charval < 0 || charval >= base)
+		{
+			return 0;
+		}
+
+		ret *= base;
+		ret += charval;
+	}
+
+	if (succ)
+	{
+		(*succ) = true;
+	}
+
+	if (sign)
+		ret = -ret;
+	return ret;
+}
+
+unsigned long fast_sntoul(const char* str, size_t sz, unsigned int base, bool* succ)
+{
+	unsigned long ret = 0;
+
+	size_t i;
+
+	if (succ)
+	{
+		(*succ) = false;
+	}
+
+	if (base > MAX_BASE || sz == 0)
+		return 0;
+
+	for (i = 0; i < sz; i++)
+	{
+		int16_t charval = __digits_val_rev_lookup(str[i]);
+		if (charval < 0 || charval >= base)
+		{
+			return 0;
+		}
+
+		ret *= base;
+		ret += charval;
+	}
+
+	if (succ)
+	{
+		(*succ) = true;
+	}
+
+	return ret;
+}
+
+float fast_sntof(const char* str, size_t sz, unsigned int base, bool* succ)
+{
+	float ret = 0;
+	float retfpart = 0;
+
+	size_t i = 0;
+	bool sign = false;
+
+	if (succ)
+	{
+		(*succ) = false;
+	}
+
+	if (base > MAX_BASE || sz == 0)
+		return 0;
+
+	if (sz >= 2 && str[0] == '-')
+	{
+		sign = true;
+		i = 1;
+	}
+
+	for (; i < sz; i++)
+	{
+		if (str[i] == '.')
+			break;
+		int16_t charval = __digits_val_rev_lookup(str[i]);
+		if (charval < 0 || charval >= base)
+		{
+			return 0;
+		}
+
+		ret *= base;
+		ret += charval;
+	}
+
+	if (str[i])
+	{
+
+		int j = fast_strlen(&str[i + 1]);
+
+		if ((j + i + 1) > sz)
+			return 0;
+
+		for (; j > 0; j--)
+		{
+			int16_t charval = __digits_val_rev_lookup(str[i + j]);
+			if (charval < 0 || charval >= base)
+			{
+				return 0;
+			}
+
+			retfpart += charval;
+			retfpart /= base;
+		}
+
+	}
+
+	if (succ)
+	{
+		(*succ) = true;
+	}
+
+	ret += retfpart;
+
+	if (sign)
+		ret = -ret;
+	return ret;
+}
+
+double fast_sntod(const char* str, size_t sz, unsigned int base, bool* succ)
+{
+	double ret = 0;
+	double retfpart = 0;
+
+	size_t i = 0;
+	bool sign = false;
+
+	if (succ)
+	{
+		(*succ) = false;
+	}
+
+	if (base > MAX_BASE || sz == 0)
+		return 0;
+
+	if (sz >= 2 && str[0] == '-')
+	{
+		sign = true;
+		i = 1;
+	}
+
+	for (; i < sz; i++)
+	{
+		if (str[i] == '.')
+			break;
+		int16_t charval = __digits_val_rev_lookup(str[i]);
+		if (charval < 0 || charval >= base)
+		{
+			return 0;
+		}
+
+		ret *= base;
+		ret += charval;
+	}
+
+	if (str[i])
+	{
+
+		int j = fast_strlen(&str[i + 1]);
+
+		if ((j + i + 1) > sz)
+			return 0;
+
+		for (; j > 0; j--)
+		{
+			int16_t charval = __digits_val_rev_lookup(str[i + j]);
+			if (charval < 0 || charval >= base)
+			{
+				return 0;
+			}
+
+			retfpart += charval;
+			retfpart /= base;
+		}
+
+	}
+
+	if (succ)
+	{
+		(*succ) = true;
+	}
+
+	ret += retfpart;
+
+	if (sign)
+		ret = -ret;
+	return ret;
+}
+
+static int snfmtui(char* buf, size_t bufsiz, unsigned long i, unsigned long base)
+{
+    if(bufsiz == 0 || base > MAX_BASE)
         return 0;
 
     if(i == 0)
     {
         if(bufsiz >= 2)
         {
-            buf[0] = '0';
+            buf[0] = __arb_base_digits[0];
             buf[1] = 0;
             return 1;
         }
@@ -70,8 +329,8 @@ static int snfmtui(char* buf, size_t bufsiz, unsigned long i)
 
     while(bufpos < bufsiz && i != 0)
     {
-        buf[bufpos++] = '0' + (i % 10);
-        i /= 10;
+        buf[bufpos++] = __arb_base_digits[(i % base)];
+        i /= base;
     }
 
     if(bufpos == bufsiz)
@@ -93,14 +352,14 @@ static int snfmtui(char* buf, size_t bufsiz, unsigned long i)
     return ret;
 }
 
-static int snfmti(char* buf, size_t bufsiz, long i)
+static int snfmti(char* buf, size_t bufsiz, long i, unsigned long base)
 {
     if(i < 0)
     {
         buf[0] = '-';
-        return snfmtui(buf+1, bufsiz-1, -i)+1;
+        return snfmtui(buf+1, bufsiz-1, -i, base)+1;
     }
-    return snfmtui(buf, bufsiz, i);
+    return snfmtui(buf, bufsiz, i, base);
 }
 
 __attribute__((format(printf,3,4)))
@@ -140,22 +399,35 @@ void fast_snprintf(char* buf, size_t bufsiz, const char* fmt, ...)
 				sym_unsigned = true;
 				goto _match_fchar;
 			case 'd':
-				// Print an int from the args
+			case 'x':
+			{
+				unsigned long base;
+				switch(fmt[fmtpos])
+				{
+				case 'd':
+					base = 10;
+					break;
+				case 'x':
+					base = 16;
+					break;
+				}
+				// Print an int from the args, formatted as decimal or hex
 				if(sym_unsigned)
 				{
 					unsigned long argval;
 					argval = va_arg(ap, unsigned long);
-					bufpos += snfmtui(&buf[bufpos], bufsiz-bufpos, argval);
+					bufpos += snfmtui(&buf[bufpos], bufsiz-bufpos, argval, base);
 					sym_unsigned = false;
 				}
 				else
 				{
 					long argval;
 					argval = va_arg(ap, long);
-					bufpos += snfmti(&buf[bufpos], bufsiz-bufpos, argval);
+					bufpos += snfmti(&buf[bufpos], bufsiz-bufpos, argval, base);
 				}
 				fmtpos++;
 				continue;
+			}
 			}
 		}
 		buf[bufpos++] = fmt[fmtpos++];

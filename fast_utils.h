@@ -2,6 +2,7 @@
 #define _FAST_UTILS_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifndef NULL
 #define NULL ((void*)0)
@@ -17,9 +18,20 @@ typedef uint32_t size_t;
 
 void fast_memcpy(void* dst, const void* src, size_t sz);
 void fast_memset(void* dst, uint8_t val, size_t sz);
+int fast_memcmp(const void* ptr1, const void* ptr2, size_t sz);
+
 size_t fast_strlen(const char* str);
+size_t fast_strcpy(char* stra, const char* strb);
+int fast_strcmp(char* stra, const char* strb);
+
+
 
 void fast_snprintf(char* buf, size_t bufsiz, const char* fmt, ...);
+
+long fast_sntol(const char* str, size_t sz, unsigned int base, bool* succ);
+unsigned long fast_sntoul(const char* str, size_t sz, unsigned int base, bool* succ);
+float fast_sntof(const char* str, size_t sz, unsigned int base, bool* succ);
+double fast_sntod(const char* str, size_t sz, unsigned int base, bool* succ);
 
 void* fast_alloc(size_t sz);
 void fast_free(void* buf);
