@@ -20,6 +20,7 @@ char* shell_argBuffer[SHELL_MAX_ARGS];
 
 const char shell_error_too_many_args[] = "Parse error: too many arguments!";
 const char shell_error_unknown_command[] = "Error: unknown command \'";
+const char shell_error_mismatched_quotes[] = "Error: mismatched quotes!";
 
 void shell_processLine(void);
 
@@ -156,27 +157,72 @@ void shell_processLine(void)
     // Initial term is at start of line
     char* shell_startOfTerm = shell_lineBuffer;
 
+    char quoteChar = 0;
+    char lastChar = 0;
+
     // Find end of term (delimited on IFS)
     uint32_t shell_lineIndex, shell_argIndex = 0;
     for (shell_lineIndex = 0; shell_lineIndex < shell_lineBufferIndex;
             shell_lineIndex++)
     {
-        if (shell_lineBuffer[shell_lineIndex] == SHELL_IFS || shell_lineBuffer[shell_lineIndex] == 0)
-        {
-            // If the maximum argument count has been reached
-            if (shell_argIndex == SHELL_MAX_ARGS)
-            {
-                Serial_puts(UART_DEBUG_MODULE, shell_error_too_many_args, 100);
-                return;
-            }
+    	char nextChar = shell_lineBuffer[shell_lineIndex];
 
-            // Swap the space character with a null byte
-            shell_lineBuffer[shell_lineIndex] = 0;
-            // Add the just-completed term to the argument list
-            shell_argBuffer[shell_argIndex++] = shell_startOfTerm;
-            // Start the next term after the null byte
-            shell_startOfTerm = &shell_lineBuffer[shell_lineIndex + 1];
-        }
+    	if(quoteChar)
+    	{
+    		bool breakOnQuote = false;
+    		for (; shell_lineIndex < shell_lineBufferIndex;
+    		            shell_lineIndex++)
+    		    {
+    				nextChar = shell_lineBuffer[shell_lineIndex];
+    				if(nextChar == quoteChar)
+    				{
+    					breakOnQuote = true;
+    					break;
+    				}
+    		    }
+
+    		if(!breakOnQuote)
+    		{
+    			Serial_puts(UART_DEBUG_MODULE, shell_error_mismatched_quotes, 100);
+    			return;
+    		}
+    	}
+
+		switch (nextChar)
+		{
+		case '\'':
+		case '\"':
+			if(!quoteChar)
+			{
+				quoteChar = nextChar;
+				shell_startOfTerm = &shell_lineBuffer[shell_lineIndex + 1];
+				break;
+			}
+			else if(nextChar == quoteChar)
+			{
+				quoteChar = 0;
+				shell_lineBuffer[shell_lineIndex] = 0;
+				break;
+			}
+		case SHELL_IFS:
+		case 0:
+			// If the maximum argument count has been reached
+			if (shell_argIndex == SHELL_MAX_ARGS)
+			{
+				Serial_puts(UART_DEBUG_MODULE, shell_error_too_many_args, 100);
+				return;
+			}
+
+			// Swap the space character with a null byte
+			shell_lineBuffer[shell_lineIndex] = 0;
+			// Add the just-completed term to the argument list
+			shell_argBuffer[shell_argIndex++] = shell_startOfTerm;
+			// Start the next term after the null byte
+			while(shell_lineBuffer[shell_lineIndex + 1] == SHELL_IFS && shell_lineIndex != shell_lineBufferIndex)
+				shell_lineIndex++;
+			shell_startOfTerm = &shell_lineBuffer[shell_lineIndex + 1];
+			break;
+		}
     }
 
     shell_run_shim_params_t shim_params;
