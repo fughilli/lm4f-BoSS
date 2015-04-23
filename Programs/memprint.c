@@ -11,6 +11,26 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/*
+ * memmanip [-u] [-c|-s|-i|-l] <ADDR> <VAL> [<VAL> ...]
+ *           ^^    ^  ^  ^  ^     ^     ^      ^^^^^
+ *        unsigned |  |  |  |  address  |        |
+ *               char |  |  |         value      |
+ *                  short|  |             subsequent values
+ *                      int |             set at the stride
+ *                         long           of the datatype
+ */
+int memmanip_main(char* argv[], int argc)
+{
+	bool succ;
+	uint32_t vals[2];
+	char prstr[32];
+	if(argc == 3)
+	{
+
+	}
+}
+
 int memprint_main(char* argv[], int argc)
 {
 	bool succ;
