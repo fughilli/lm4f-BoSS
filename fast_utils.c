@@ -100,10 +100,10 @@ size_t fast_strcpy(char* stra, const char* strb)
 	return ret;
 }
 
-int fast_strcmp(char* stra, const char* strb)
+int fast_strcmp(const char* stra, const char* strb)
 {
 	int ret = 0;
-	while ((ret == 0) && (*stra) && (*strb))
+	while ((ret == 0) && ((*stra) || (*strb)))
 	{
 		ret += (*stra);
 		ret -= (*strb);
@@ -330,6 +330,79 @@ double fast_sntod(const char* str, size_t sz, unsigned int base, bool* succ)
 	return ret;
 }
 
+bool fast_sntob(const char* str, size_t sz, bool* succ)
+{
+	if (sz < 4)
+	{
+		if (succ)
+			(*succ) = false;
+		return false;
+	}
+
+	if (fast_memcmp(str, "true", 4) == 0)
+	{
+		if (succ)
+			(*succ) = true;
+		return true;
+	}
+
+	if (fast_memcmp(str, "false", 5) == 0)
+	{
+		if (succ)
+			(*succ) = true;
+		return false;
+	}
+
+	if (succ)
+		(*succ) = false;
+	return false;
+}
+
+int fast_snfmtf(char* buf, size_t bufsiz, float f, size_t digits, unsigned long base)
+{
+	if (bufsiz == 0 || base > MAX_BASE)
+		return 0;
+
+	if (f == 0.0f)
+	{
+		if (bufsiz >= 4)
+		{
+			fast_memcpy(buf, "0.0f", 4);
+			return 1;
+		}
+		else
+		{
+			buf[0] = 0;
+			return 0;
+		}
+	}
+
+	uint32_t bufindex = 0;
+	if(f < 0)
+	{
+		f = -f;
+		buf[0] = '-';
+		bufindex++;
+	}
+
+	int i;
+	long fpartmul = 1;
+	for(i = 0; i < digits; i++)
+		fpartmul *= base;
+
+	long wholepart = (long)f;
+	long fpart = (long)((f - wholepart) * fpartmul);
+
+	bufindex += fast_snfmtui(&buf[bufindex], bufsiz - bufindex, wholepart, 10);
+	if(bufindex != bufsiz)
+	{
+		buf[bufindex++] = '.';
+	}
+	bufindex += fast_snfmtui(&buf[bufindex], bufsiz - bufindex, fpart, 10);
+
+	return bufindex;
+}
+
 unsigned long fast_nextmulof(unsigned long val, unsigned long q)
 {
 	// base cases
@@ -467,6 +540,20 @@ void fast_snprintf(char* buf, size_t bufsiz, const char* fmt, ...)
 				sym_unsigned = true;
 				fmtpos++;
 				goto _match_fchar;
+			case 'f':
+			{
+				double argval;
+				argval = va_arg(ap, double);
+				if(!precision)
+                    precision = FLOAT_DEFAULT_DIGITS;
+                if(precision > FLOAT_MAX_DIGITS)
+                    precision = FLOAT_MAX_DIGITS;
+				bufpos += fast_snfmtf(&buf[bufpos], bufsiz-bufpos, argval, precision, 10);
+				precision = 0;
+				sym_unsigned = false;
+				fmtpos++;
+				continue;
+			}
 			case 'd':
 			case 'x':
 			{
@@ -516,13 +603,13 @@ void fast_snprintf(char* buf, size_t bufsiz, const char* fmt, ...)
                     else
                     {
                         size_t intstrsiz = fast_snfmti(&buf[bufpos], bufsiz-bufpos, argval, base);
-                        if(intstrsiz < precision)
+                        if(intstrsiz < precision + 1)
                         {
                             if((bufsiz-bufpos) >= precision)
                             {
-                                fast_memmove(&buf[bufpos + (precision - intstrsiz)], &buf[bufpos], intstrsiz);
-                                fast_memset(&buf[bufpos], (uint8_t)((padwzeros)?('0'):(' ')), precision-intstrsiz);
-                                bufpos += precision;
+                                fast_memmove(&buf[bufpos + (precision - intstrsiz) + 2], &buf[bufpos + 1], intstrsiz);
+                                fast_memset(&buf[bufpos + 1], (uint8_t)((padwzeros)?('0'):(' ')), precision-intstrsiz + 1);
+                                bufpos += precision + 1;
                             }
                             else
                                 break;
