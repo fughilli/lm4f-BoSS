@@ -69,7 +69,7 @@ void pipe_close(fd_t fd)
 
 int32_t pipe_read(fd_t fd, uint8_t* buf, int32_t len)
 {
-	if(!FD_VALID(fd))
+	if(!FD_VALID_PIPE(fd))
 		return RW_INVALID;
 
 	pipe_t* ps = (pipe_t*)file_table[fd].fdata;
@@ -91,7 +91,7 @@ int32_t pipe_read(fd_t fd, uint8_t* buf, int32_t len)
 
 int32_t pipe_write(fd_t fd, const uint8_t* buf, int32_t len)
 {
-	if (!FD_VALID(fd))
+	if (!FD_VALID_PIPE(fd))
 		return RW_INVALID;
 
 	pipe_t* ps = (pipe_t*) file_table[fd].fdata;
@@ -109,5 +109,28 @@ int32_t pipe_write(fd_t fd, const uint8_t* buf, int32_t len)
 	//TODO: pipe_read--> sys_unlock(&ps->lock);
 
 	return iidx;
+}
+
+int32_t pipe_transfer(fd_t destfd, fd_t srcfd, int32_t len)
+{
+	if (!FD_VALID_PIPE(destfd) || !FD_VALID_PIPE(srcfd))
+		return RW_INVALID;
+
+	pipe_t* srcps = (pipe_t*) file_table[srcfd].fdata;
+	pipe_t* destps = (pipe_t*) file_table[destfd].fdata;
+
+	int32_t bytes_transferred = 0;
+
+	for (; len > 0 && ((srcps->head) != srcps->tail) && ((destps->tail + 1) != destps->head); len--)
+	{
+		destps->buf[destps->tail++] = srcps->buf[srcps->head++];
+		if (destps->head == destps->bufsiz)
+			destps->head = 0;
+		if (srcps->tail == srcps->bufsiz)
+			srcps->tail = 0;
+		bytes_transferred++;
+	}
+
+	return bytes_transferred;
 }
 
