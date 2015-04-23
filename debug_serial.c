@@ -95,6 +95,7 @@ void Serial_init(uint8_t module, uint32_t baud)
 
 	SysCtlPeripheralEnable(uart_peripherals[module]);
 	SysCtlPeripheralEnable(gpio_peripherals[module]);
+	UARTClockSourceSet(uart_bases[module], UART_CLOCK_SYSTEM);
 	UARTConfigSetExpClk(uart_bases[module], SysCtlClockGet(), baud,
 	UART_CONFIG_WLEN_8 | UART_CONFIG_PAR_NONE | UART_CONFIG_STOP_ONE);
 	GPIOPinConfigure(gpio_configs[module]);
