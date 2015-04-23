@@ -11,6 +11,8 @@
 
 const uint8_t _bsp_seq[] = {SHELL_BACKSPACE, ' ', SHELL_BACKSPACE};
 
+#define _SHELL_PROMPT_LABEL_ "DankOS"
+
 #define SHELL_IFS (' ')
 
 char shell_lineBuffer[SHELL_LINE_BUFFER_SIZE];
@@ -75,7 +77,7 @@ void shell_main(void* arg)
 {
     while (1)
     {
-        Serial_puts(UART_DEBUG_MODULE, "root@stellaris:>", 100);
+        Serial_puts(UART_DEBUG_MODULE, _SHELL_PROMPT_LABEL_ ":>", 100);
         shell_lineBufferIndex = 0;
 
         while (1)
@@ -89,13 +91,21 @@ void shell_main(void* arg)
 
             // Handle newline (end-of-command)
             if (nextChar == '\r')
-            {
-                shell_lineBuffer[shell_lineBufferIndex++] = 0;
+			{
+				if (shell_lineBufferIndex)
+				{
+					shell_lineBuffer[shell_lineBufferIndex++] = 0;
 
-                Serial_puts(UART_DEBUG_MODULE, "\r\n", 2);
+					Serial_puts(UART_DEBUG_MODULE, "\r\n", 2);
 
-                shell_processLine();
-                break;
+					shell_processLine();
+					break;
+				}
+				else
+				{
+					Serial_puts(UART_DEBUG_MODULE, "\r\n", 2);
+					break;
+				}
             }
             else if (nextChar == SHELL_BACKSPACE)
             {
