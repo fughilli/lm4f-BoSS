@@ -253,7 +253,7 @@
 				</extensions>
 			</storageModule>
 			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration artifactExtension="out" artifactName="${ProjName}" buildProperties="" cleanCommand="${CG_CLEAN_CMD}" description="" id="com.ti.ccstudio.buildDefinitions.TMS470.Debug.645504595.1286483387" name="DebugGNUStellaris" parent="com.ti.ccstudio.buildDefinitions.TMS470.Debug" postbuildStep="" prebuildStep="">
+				<configuration artifactExtension="out" artifactName="${ProjName}" buildProperties="" cleanCommand="${CG_CLEAN_CMD}" description="" id="com.ti.ccstudio.buildDefinitions.TMS470.Debug.645504595.1286483387" name="DebugGNUStellaris" parent="com.ti.ccstudio.buildDefinitions.TMS470.Debug" postbuildStep="" preannouncebuildStep="Run the pre-build script (this will autogenerate some OS components, including refreshing the system call list)" prebuildStep="..\prebuild.sh">
 					<folderInfo id="com.ti.ccstudio.buildDefinitions.TMS470.Debug.645504595.1286483387." name="/" resourcePath="">
 						<toolChain id="com.ti.ccstudio.buildDefinitions.TMS470_GNU_4.0.exe.DebugToolchain.1274359747" name="TI Build Tools" superClass="com.ti.ccstudio.buildDefinitions.TMS470_GNU_4.0.exe.DebugToolchain" targetTool="com.ti.ccstudio.buildDefinitions.TMS470_GNU_4.0.exe.linkerDebug.495494232">
 							<option id="com.ti.ccstudio.buildDefinitions.core.OPT_TAGS.1815174980" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_TAGS" valueType="stringList">
