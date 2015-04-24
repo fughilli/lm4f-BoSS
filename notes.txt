@@ -16,4 +16,20 @@ need to add system calls for filesystem operations:
 	be considered (but first the kernel must be made reentrant, which will break a
 	whole shitload of stuff) 
 	SYS_MOUNT, SYS_UNMOUNT, SYS_LISTDIR, SYS_CHDIR, SYS_TOUCH, SYS_OPEN (should give
-	a fd back)
+	a fd back), SYS_UNLINK, SYS_CP (could be implemented as a combination of *TOUCH, 
+	*READ, and *WRITE), SYS_MV (<<<), SYS_
+	
+need to implement default filestreams (stdint, stdout, stderr) and logging:
+	verbose mode --> log everything to files
+	
+need to implement serial bootloader:
+	should use base64 encoding for data transfer; compute checksum on data block and
+	confirm with sender before write; make secure bootloader by caching in SD card and
+	then flagging bootloader to run at the next power up and read the file from the SD
+	into flash
+
+need to implement program loader:
+	load executable files from SD card to SRAM and run them
+	
+need to update lock() and unlock() to use synchronization primitives listed on page 100
+	ss. 2.4.7 of tm4c123h6pm.pdf
