@@ -23,21 +23,25 @@
 
 #include <stdbool.h>
 
+#define _SECTION_DECLARE(_typedecl_,_symbol_,_arrs_,_val_,_section_) _typedecl_ (_symbol_) _arrs_ __attribute__((section("#_section"))) = (_val_)
+#define _SECTION_STRING(_symbol_,_string_,_section_) _SECTION_DECLARE(const char,_symbol_,[],_string_,_section_)
+#define _FLASH_STRING(_symbol_,_string_) _SECTION_STRING(_symbol_,_string_,FLASH)
+
 //uint8_t kernel_stack[128] __attribute((aligned(8)));
 
-fd_assoc_t file_table[MAX_FILES];
+fd_assoc_t file_table[MAX_FILES] __attribute__((section("SRAM")));
 
-const char __k_kp_str_hdr[] = "Kernel panic: ";
-const char __k_kp_str_hardfault[] = "hard fault";
-const char __k_kp_str_nmi[] = "non-maskable interrupt";
-const char __k_kp_str_default[] = "unimplemented ISR";
-const char __k_kp_str_nl[] = "\r\n";
+_FLASH_STRING(__k_thread_valid_incorrect_behavior, "thread_valid: incorrect behavior");
+_FLASH_STRING(__k_thread_pos_incorrect_behavior, "thread_pos: incorrect behavior");
+_FLASH_STRING(__k_kp_str_hdr, "Kernel panic: ");
+_FLASH_STRING(__k_kp_str_hardfault, "hard fault");
+_FLASH_STRING(__k_kp_str_nmi, "non-maskable interrupt");
+_FLASH_STRING(__k_kp_str_default, "unimplemented ISR");
+_FLASH_STRING(__k_kp_str_nl, "\r\n");
+_FLASH_STRING(__k_r_str, "Going down for soft reset NOW!");
+_FLASH_STRING(__k_kp_str_regtrace, "Registers before fault:\r\n");
 
-const char __k_r_str[] = "Going down for soft reset NOW!";
-
-const char __k_kp_str_regtrace[] = "Registers before fault:\r\n";
-
-const char __k_kp_str_regnames[THREAD_SAVED_REGISTERS_NUM][4] =
+const char __k_kp_str_regnames[THREAD_SAVED_REGISTERS_NUM][4] __attribute__((section("FLASH"))) =
 {
 		"SP ", "R0 ", "R1 ", "R2 ",
 		"R3 ", "R4 ", "R5 ", "R6 ",
@@ -46,7 +50,7 @@ const char __k_kp_str_regnames[THREAD_SAVED_REGISTERS_NUM][4] =
 		"PSR"
 };
 
-const uint8_t __k_reg_sp_offsets[THREAD_SAVED_REGISTERS_NUM] =
+const uint8_t __k_reg_sp_offsets[THREAD_SAVED_REGISTERS_NUM] __attribute__((section("FLASH"))) =
 {
 		0, 11, 12, 13,
 		14, 0, 1, 2,
@@ -81,8 +85,10 @@ void kernel_init()
 	int i;
 	for(i = 0; i < MAX_THREADS; i++)
 	{
-		kernel_assert(thread_pos(&thread_table[i]) == i, "thread_pos: incorrect behavior", 100);
-		kernel_assert(thread_valid(&thread_table[i]), "thread_valid: incorrect behavior", 100);
+		kernel_assert(thread_pos(&thread_table[i]) == i,
+				__k_thread_pos_incorrect_behavior, 100);
+		kernel_assert(thread_valid(&thread_table[i]),
+				__k_thread_valid_incorrect_behavior, 100);
 	}
 
 	kernel_set_scheduler_freq(KERNEL_SCHEDULER_IRQ_FREQ);
