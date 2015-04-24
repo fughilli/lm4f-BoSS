@@ -1,3 +1,11 @@
+# syscall_numbers.txt: system call number symbols list
+# this is a template file; the script syscall_numbers.py
+# reads this file, and for each symbol listed here (one
+# per line) it generates a corresponding #define statement 
+# in syscall_numbers.h with linear numbering (starting at 
+# 0, going up by one for each symbol)  
+
+# Thread state management
 SYSCALL_EXIT
 SYSCALL_YIELD
 SYSCALL_SLEEP
@@ -5,30 +13,48 @@ SYSCALL_SPAWN
 SYSCALL_FORK
 SYSCALL_RESET
 
-SYSCALL_LOCK
-SYSCALL_UNLOCK
-
 SYSCALL_GET_TID
 
 SYSCALL_SET_PRI
 SYSCALL_GET_PRI
 
+# synchronization
+SYSCALL_LOCK
+SYSCALL_UNLOCK
+
+# printing (to serial ports only)
 SYSCALL_PUTS
 SYSCALL_PUTC
 
+# file I/O (hooks into filesystem, so will work on
+# files, pipes, devices, etc...)
 SYSCALL_WRITE
 SYSCALL_READ
 SYSCALL_SEEK
 SYSCALL_IOCTL
 SYSCALL_CLOSE
-SYSCALL_POPEN
-SYSCALL_FOPEN
-SYSCALL_DOPEN
 
+# Filesystem I/O
+SYSCALL_OPEN
+SYSCALL_LISTDIR
+SYSCALL_CHDIR
+SYSCALL_UNLINK
+SYSCALL_MV
+SYSCALL_CP
 SYSCALL_MOUNT
 SYSCALL_UNMOUNT
 
+# Pipe creation
+SYSCALL_POPEN
+
+# Device creation (accepts a device type, registered
+# with OS from driver)
+SYSCALL_DOPEN
+
+# This is just for fun
 SYSCALL_FLUBBER
+
+# GPIO
 SYSCALL_SET_PORT_DIRS
 SYSCALL_READ_PORT
 SYSCALL_WRITE_PORT
