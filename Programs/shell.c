@@ -9,14 +9,21 @@
 #include <stdint.h>
 #include "../debug_serial.h"
 
-const uint8_t _bsp_seq[] = {SHELL_BACKSPACE, ' ', SHELL_BACKSPACE};
+const uint8_t _bsp_seq[] =
+{ SHELL_BACKSPACE, ' ', SHELL_BACKSPACE };
 
 #define _SHELL_PROMPT_LABEL_ "DankOS"
 
 #define SHELL_IFS (' ')
+#define SHELL_ESC_CHAR ('\x1B')
+#define SHELL_LARROW_SEQ ("\x1B[D")
+#define SHELL_RARROW_SEQ ("\x1B[C")
+#define SHELL_UARROW_SEQ ("\x1B[A")
+#define SHELL_DARROW_SEQ ("\x1B[B")
 
 char shell_lineBuffer[SHELL_LINE_BUFFER_SIZE];
 uint32_t shell_lineBufferIndex;
+uint32_t shell_lineBufferInsertIndex;
 
 char* shell_argBuffer[SHELL_MAX_ARGS];
 
@@ -30,67 +37,68 @@ shell_progMapEntry_t shell_progMap[SHELL_MAX_PROGRAMS];
 
 void shell_initProgMap()
 {
-    int i;
-    for(i = 0; i < SHELL_MAX_PROGRAMS; i++)
-    {
-        shell_progMap[i].name[0] = 0;
-    }
+	int i;
+	for (i = 0; i < SHELL_MAX_PROGRAMS; i++)
+	{
+		shell_progMap[i].name[0] = 0;
+	}
 }
 
 bool shell_registerProgram(const char* name, shell_func_t prog_main)
 {
-    if(fast_strlen(name) > SHELL_MAX_PROGRAM_NAMELEN-1)
-        return false;
+	if (fast_strlen(name) > SHELL_MAX_PROGRAM_NAMELEN - 1)
+		return false;
 
-    int i;
-    for(i = 0; i < SHELL_MAX_PROGRAMS; i++)
-    {
-        if(shell_progMap[i].name[0] == 0)
-        {
-            fast_strcpy(shell_progMap[i].name, name);
-            shell_progMap[i].prog_main = prog_main;
-            return true;
-        }
-    }
+	int i;
+	for (i = 0; i < SHELL_MAX_PROGRAMS; i++)
+	{
+		if (shell_progMap[i].name[0] == 0)
+		{
+			fast_strcpy(shell_progMap[i].name, name);
+			shell_progMap[i].prog_main = prog_main;
+			return true;
+		}
+	}
 
-    return false;
+	return false;
 }
 
 shell_func_t shell_getProg(const char* name)
 {
-    if(fast_strlen(name) > SHELL_MAX_PROGRAM_NAMELEN-1)
-        return NULL;
+	if (fast_strlen(name) > SHELL_MAX_PROGRAM_NAMELEN - 1)
+		return NULL;
 
-    int i;
-    for(i = 0; i < SHELL_MAX_PROGRAMS; i++)
-    {
-        if(fast_strcmp(shell_progMap[i].name, name) == 0)
-        {
-            return shell_progMap[i].prog_main;
-        }
-    }
+	int i;
+	for (i = 0; i < SHELL_MAX_PROGRAMS; i++)
+	{
+		if (fast_strcmp(shell_progMap[i].name, name) == 0)
+		{
+			return shell_progMap[i].prog_main;
+		}
+	}
 
-    return NULL;
+	return NULL;
 }
 
 void shell_main(void* arg)
 {
-    while (1)
-    {
-        Serial_puts(UART_DEBUG_MODULE, _SHELL_PROMPT_LABEL_ ":>", 100);
-        shell_lineBufferIndex = 0;
+	while (1)
+	{
+		Serial_puts(UART_DEBUG_MODULE, _SHELL_PROMPT_LABEL_ ":>", 100);
+		shell_lineBufferIndex = 0;
+		shell_lineBufferInsertIndex = 0;
 
-        while (1)
-        {
+		while (1)
+		{
 			while (!Serial_avail(UART_DEBUG_MODULE))
 			{
 				sys_sleep(10);
 			}
 
-            char nextChar = Serial_getc(UART_DEBUG_MODULE);
+			char nextChar = Serial_getc(UART_DEBUG_MODULE);
 
-            // Handle newline (end-of-command)
-            if (nextChar == '\r')
+			// Handle newline (end-of-command)
+			if (nextChar == '\r')
 			{
 				if (shell_lineBufferIndex)
 				{
@@ -106,41 +114,116 @@ void shell_main(void* arg)
 					Serial_puts(UART_DEBUG_MODULE, "\r\n", 2);
 					break;
 				}
-            }
-            else if (nextChar == SHELL_BACKSPACE)
-            {
-                if (shell_lineBufferIndex > 0)
-                {
-                    shell_lineBufferIndex--;
-                    Serial_writebuf(UART_DEBUG_MODULE, _bsp_seq, 3);
-                }
-                else
-                {
-                    Serial_putc(UART_DEBUG_MODULE, SHELL_BELL_CHAR);
-                }
-                continue;
-            }
-            // Handle special character
-            else if (nextChar < ' ')
-            {
-                continue;
-            }
-            else
-            {
-                shell_lineBuffer[shell_lineBufferIndex++] = nextChar;
-            }
+			}
+			else if (nextChar == SHELL_BACKSPACE)
+			{
+				if (shell_lineBufferInsertIndex > 0)
+				{
+					fast_memmove(
+							&shell_lineBuffer[shell_lineBufferInsertIndex - 1],
+							&shell_lineBuffer[shell_lineBufferInsertIndex],
+							shell_lineBufferIndex
+									- shell_lineBufferInsertIndex);
+					shell_lineBufferInsertIndex--;
+					shell_lineBufferIndex--;
+					Serial_writebuf(UART_DEBUG_MODULE, _bsp_seq, 3);
+				}
+				else
+				{
+					Serial_putc(UART_DEBUG_MODULE, SHELL_BELL_CHAR);
+				}
+				continue;
+			}
+			// Handle special character
+			else if (nextChar < ' ')
+			{
+				if (nextChar == SHELL_ESC_CHAR)
+				{
+					if (Serial_getc(UART_DEBUG_MODULE) == '[')
+					{
+						char control_char;
+						switch (control_char = Serial_getc(UART_DEBUG_MODULE))
+						{
+//            			case 'A':
+//            				continue;
+//            				break;
+//            			case 'B':
+//            				continue;
+//            				break;
+						case '4':
+							Serial_getc(UART_DEBUG_MODULE); // Consume '~'
+							shell_lineBufferInsertIndex = shell_lineBufferIndex;
+							Serial_writebuf(UART_DEBUG_MODULE, "\x1B[4~", 4);
+							continue;
+							break;
+						case '1':
+							Serial_getc(UART_DEBUG_MODULE); // Consume '~'
+							shell_lineBufferInsertIndex = 0;
+							Serial_writebuf(UART_DEBUG_MODULE, "\x1B[1~", 4);
+							continue;
+							break;
+						case 'D':
+							if (shell_lineBufferInsertIndex > 0)
+							{
+								shell_lineBufferInsertIndex--;
+								Serial_writebuf(UART_DEBUG_MODULE, SHELL_LARROW_SEQ, 3);
+							}
+							else
+							{
+								Serial_putc(UART_DEBUG_MODULE, SHELL_BELL_CHAR);
+							}
+							continue;
+							break;
+						case 'C':
+							if (shell_lineBufferInsertIndex
+									< shell_lineBufferIndex)
+							{
+								shell_lineBufferInsertIndex++;
+								Serial_writebuf(UART_DEBUG_MODULE, SHELL_RARROW_SEQ, 3);
+							}
+							else
+							{
+								Serial_putc(UART_DEBUG_MODULE, SHELL_BELL_CHAR);
+							}
+							continue;
+							break;
+						default:
+							continue;
+						}
+					}
+				}
+				continue;
+			}
+			else
+			{
+				if (shell_lineBufferInsertIndex == shell_lineBufferIndex)
+				{
+					shell_lineBuffer[shell_lineBufferIndex++] = nextChar;
+					shell_lineBufferInsertIndex++;
+				}
+				else if (shell_lineBufferInsertIndex < shell_lineBufferIndex)
+				{
+					fast_memmove(
+							&shell_lineBuffer[shell_lineBufferInsertIndex + 1],
+							&shell_lineBuffer[shell_lineBufferInsertIndex],
+							shell_lineBufferIndex
+									- shell_lineBufferInsertIndex);
+					shell_lineBuffer[shell_lineBufferInsertIndex++] = nextChar;
+					shell_lineBufferIndex++;
+				}
+			}
 
-            // Handle line buffer overrun
-            if (shell_lineBufferIndex == SHELL_LINE_BUFFER_SIZE)
-            {
-                Serial_putc(UART_DEBUG_MODULE, SHELL_BELL_CHAR);
-                shell_lineBufferIndex--;
-                continue;
-            }
+			// Handle line buffer overrun
+			if (shell_lineBufferIndex == SHELL_LINE_BUFFER_SIZE)
+			{
+				Serial_putc(UART_DEBUG_MODULE, SHELL_BELL_CHAR);
+				shell_lineBufferIndex--;
+				continue;
+			}
 
-            Serial_putc(UART_DEBUG_MODULE, nextChar);
-        }
-    }
+			Serial_putc(UART_DEBUG_MODULE, nextChar);
+		}
+	}
 }
 
 typedef struct
@@ -154,7 +237,7 @@ lock_t shim_print_lock = LOCK_UNLOCKED;
 
 void shell_run_shim(void* arg)
 {
-	shell_run_shim_params_t* shimparams = ((shell_run_shim_params_t*)arg);
+	shell_run_shim_params_t* shimparams = ((shell_run_shim_params_t*) arg);
 	int ret = shimparams->func(shimparams->argv, shimparams->argc);
 
 	sys_unlock(&shim_print_lock);
@@ -164,51 +247,51 @@ void shell_run_shim(void* arg)
 
 void shell_processLine(void)
 {
-    // Initial term is at start of line
-    char* shell_startOfTerm = shell_lineBuffer;
+	// Initial term is at start of line
+	char* shell_startOfTerm = shell_lineBuffer;
 
-    char quoteChar = 0;
-    char lastChar = 0;
+	char quoteChar = 0;
+	char lastChar = 0;
 
-    // Find end of term (delimited on IFS)
-    uint32_t shell_lineIndex, shell_argIndex = 0;
-    for (shell_lineIndex = 0; shell_lineIndex < shell_lineBufferIndex;
-            shell_lineIndex++)
-    {
-    	char nextChar = shell_lineBuffer[shell_lineIndex];
+	// Find end of term (delimited on IFS)
+	uint32_t shell_lineIndex, shell_argIndex = 0;
+	for (shell_lineIndex = 0; shell_lineIndex < shell_lineBufferIndex;
+			shell_lineIndex++)
+	{
+		char nextChar = shell_lineBuffer[shell_lineIndex];
 
-    	if(quoteChar)
-    	{
-    		bool breakOnQuote = false;
-    		for (; shell_lineIndex < shell_lineBufferIndex;
-    		            shell_lineIndex++)
-    		    {
-    				nextChar = shell_lineBuffer[shell_lineIndex];
-    				if(nextChar == quoteChar)
-    				{
-    					breakOnQuote = true;
-    					break;
-    				}
-    		    }
+		if (quoteChar)
+		{
+			bool breakOnQuote = false;
+			for (; shell_lineIndex < shell_lineBufferIndex; shell_lineIndex++)
+			{
+				nextChar = shell_lineBuffer[shell_lineIndex];
+				if (nextChar == quoteChar)
+				{
+					breakOnQuote = true;
+					break;
+				}
+			}
 
-    		if(!breakOnQuote)
-    		{
-    			Serial_puts(UART_DEBUG_MODULE, shell_error_mismatched_quotes, 100);
-    			return;
-    		}
-    	}
+			if (!breakOnQuote)
+			{
+				Serial_puts(UART_DEBUG_MODULE, shell_error_mismatched_quotes,
+						100);
+				return;
+			}
+		}
 
 		switch (nextChar)
 		{
 		case '\'':
 		case '\"':
-			if(!quoteChar)
+			if (!quoteChar)
 			{
 				quoteChar = nextChar;
 				shell_startOfTerm = &shell_lineBuffer[shell_lineIndex + 1];
 				break;
 			}
-			else if(nextChar == quoteChar)
+			else if (nextChar == quoteChar)
 			{
 				quoteChar = 0;
 				shell_lineBuffer[shell_lineIndex] = 0;
@@ -228,32 +311,35 @@ void shell_processLine(void)
 			// Add the just-completed term to the argument list
 			shell_argBuffer[shell_argIndex++] = shell_startOfTerm;
 			// Start the next term after the null byte
-			while(shell_lineBuffer[shell_lineIndex + 1] == SHELL_IFS && shell_lineIndex != shell_lineBufferIndex)
+			while (shell_lineBuffer[shell_lineIndex + 1] == SHELL_IFS
+					&& shell_lineIndex != shell_lineBufferIndex)
 				shell_lineIndex++;
 			shell_startOfTerm = &shell_lineBuffer[shell_lineIndex + 1];
 			break;
 		}
-    }
+	}
 
-    shell_run_shim_params_t shim_params;
-    if((shim_params.func = shell_getProg(shell_argBuffer[0])))
-    {
-    	shim_params.argc = shell_argIndex;
-    	shim_params.argv = shell_argBuffer;
+	shell_run_shim_params_t shim_params;
+	if ((shim_params.func = shell_getProg(shell_argBuffer[0])))
+	{
+		shim_params.argc = shell_argIndex;
+		shim_params.argv = shell_argBuffer;
 
-    	while(!sys_lock(&shim_print_lock))
-    		sys_sleep(10);
+		while (!sys_lock(&shim_print_lock))
+			sys_sleep(10);
 
-    	sys_spawn(shell_run_shim, &shim_params);
+		sys_spawn(shell_run_shim, &shim_params);
 
-    	while(shim_print_lock)
-    		sys_sleep(10);
-    }
-    else
-    {
-    	Serial_puts(UART_DEBUG_MODULE, shell_error_unknown_command, fast_strlen(shell_error_unknown_command));
-        Serial_puts(UART_DEBUG_MODULE, shell_argBuffer[0], fast_strlen(shell_argBuffer[0]));
-        Serial_puts(UART_DEBUG_MODULE, "\'\r\n", 3);
-    }
+		while (shim_print_lock)
+			sys_sleep(10);
+	}
+	else
+	{
+		Serial_puts(UART_DEBUG_MODULE, shell_error_unknown_command,
+				fast_strlen(shell_error_unknown_command));
+		Serial_puts(UART_DEBUG_MODULE, shell_argBuffer[0],
+				fast_strlen(shell_argBuffer[0]));
+		Serial_puts(UART_DEBUG_MODULE, "\'\r\n", 3);
+	}
 }
 
