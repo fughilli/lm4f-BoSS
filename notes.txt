@@ -1,0 +1,19 @@
+4/24/15:
+need to implement sys_wait(tid_t):
+	should mark current process as T_BLOCKED. In order to implement this behavior, 
+	each thread should have a pointer in its table to a function with no arguments 
+	that returns a boolean indicating if the thread is still blocked or not. In 
+	the case of sys_wait, the function mapped to should return true when the 
+	thread being waited on has exited, else false.
+	
+need to complete implementation in fsystem.*
+need to complete implementation of Drivers/driver_sdcard.* --> should link up with 
+	primitives in fsystem.*
+need to add system calls for filesystem operations:
+	each thread needs its own filesystem context; (a pointer to) this context should 
+	be stored in the thread table entry for that thread. File operations will be
+	performed in the kernel and are therefore atomic; in the future, reentrancy should
+	be considered (but first the kernel must be made reentrant, which will break a
+	whole shitload of stuff) 
+	SYS_MOUNT, SYS_UNMOUNT, SYS_LISTDIR, SYS_CHDIR, SYS_TOUCH, SYS_OPEN (should give
+	a fd back)
