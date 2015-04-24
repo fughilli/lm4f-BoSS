@@ -20,8 +20,12 @@ typedef int32_t fd_t;
 #define SEEK_INVALID ((int32_t)(-1))
 #define IOCTL_INVALID ((uint32_t)(-1))
 
+typedef int32_t fmode_t;
+
 #define FMODE_R (0x00000001)
 #define FMODE_W (0x00000002)
+
+typedef int32_t fflags_t;
 
 #define FFLAG_CREAT 0x00000001
 #define FFLAG_APPND 0x00000002
@@ -46,9 +50,6 @@ typedef struct
 	const fd_funmap_t* funmap;
 } fd_assoc_t;
 
-// Method map for regular files
-extern const fd_funmap_t file_funmap;
-
 // The file table; holds all open fd associations
 extern fd_assoc_t file_table[MAX_FILES];
 
@@ -67,12 +68,5 @@ int32_t read(fd_t fd, uint8_t* buf, int32_t len);
 int32_t write(fd_t fd, const uint8_t* buf, int32_t len);
 int32_t seek(fd_t fd, int32_t pos);
 uint32_t ioctl(fd_t fd, uint32_t mask, void* arg);
-
-fd_t file_open(const char* fname, uint32_t mode, uint32_t flags);
-void file_close(fd_t fd);
-
-int32_t file_read(fd_t fd, uint8_t* buf, int32_t len);
-int32_t file_write(fd_t fd, const uint8_t* buf, int32_t len);
-int32_t file_seek(fd_t fd, int32_t pos);
 
 #endif /* FILE_H_ */

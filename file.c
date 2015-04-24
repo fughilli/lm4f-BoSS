@@ -11,15 +11,6 @@
 #define CALL_IF_VALID(_fptr_, ...) if((_fptr_)){(_fptr_)(__VA_ARGS__);}
 #define CALLRET_IF_VALID(_fptr_, ...) if((_fptr_)){return (_fptr_)(__VA_ARGS__);}
 
-const fd_funmap_t file_funmap =
-{
-		.close = file_close,
-		.read = file_read,
-		.write = file_write,
-		.seek = file_seek,
-		.ioctl = NULL
-};
-
 void ftable_init()
 {
 	fd_t i;
@@ -96,29 +87,4 @@ uint32_t ioctl(fd_t fd, uint32_t mask, void* arg)
 		CALLRET_IF_VALID(file_table[fd].funmap->ioctl, fd, mask, arg);
 
 			return IOCTL_INVALID;
-}
-
-fd_t file_open(const char* fname, uint32_t mode, uint32_t flags)
-{
-	return FD_INVALID;
-}
-
-void file_close(fd_t fd)
-{
-
-}
-
-int32_t file_read(fd_t fd, uint8_t* buf, int32_t len)
-{
-	return RW_INVALID;
-}
-
-int32_t file_write(fd_t fd, const uint8_t* buf, int32_t len)
-{
-	return RW_INVALID;
-}
-
-int32_t file_seek(fd_t fd, int32_t pos)
-{
-	return SEEK_INVALID;
 }
