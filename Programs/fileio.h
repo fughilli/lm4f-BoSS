@@ -13,5 +13,13 @@
 int write_main(char* argv[], int argc);
 int read_main(char* argv[], int argc);
 int ioctl_main(char* argv[], int argc);
+int open_main(char* argv[], int argc);
+int close_main(char* argv[], int argc);
+int ls_main(char* argv[], int argc);
+int cd_main(char* argv[], int argc);
+int cat_main(char* argv[], int argc);
+int rm_main(char* argv[], int argc);
+int touch_main(char* argv[], int argc);
+int mkdir_main(char* argv[], int argc);
 
 #endif /* FILEIO_H_ */

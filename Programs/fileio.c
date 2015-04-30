@@ -28,6 +28,189 @@ int write_main(char* argv[], int argc)
 	return sys_write(fd, (uint8_t*)argv[2], fast_strlen(argv[2]));
 }
 
+int open_main(char* argv[], int argc)
+{
+	char printbuf[32];
+	fflags_t flags;
+	fmode_t mode;
+	if(argc == 4)
+	{
+		bool succ;
+		mode = (fmode_t)fast_sntoul(argv[2], fast_strlen(argv[2]), 16, &succ);
+		if (!succ)
+		{
+			goto __open_fail;
+		}
+		flags = (fflags_t)fast_sntoul(argv[3], fast_strlen(argv[3]), 16, &succ);
+		if (!succ)
+		{
+			goto __open_fail;
+		}
+	}
+
+	fd_t resfd = sys_open(argv[1], mode, flags);
+	fast_snprintf(printbuf, 32, "fd: %d\r\n", (int)resfd);
+	sys_puts(printbuf, 32);
+	return 0;
+
+	__open_fail:
+	sys_puts("Invalid arguments.\r\n", 100);
+	return -1;
+}
+
+int close_main(char* argv[], int argc)
+{
+	fd_t argfd;
+	if(argc == 2)
+	{
+		bool succ;
+		argfd = (fd_t)fast_sntoul(argv[1], fast_strlen(argv[1]), 10, &succ);
+		if (!succ)
+		{
+			goto __close_fail;
+		}
+	}
+
+	sys_close(argfd);
+	sys_puts("Closed file.\r\n", 32);
+	return 0;
+
+	__close_fail:
+	sys_puts("Invalid arguments.\r\n", 100);
+	return -1;
+}
+
+int cat_main(char* argv[], int argc)
+{
+	char printbuf[64];
+	int32_t readsiz;
+	if (argc == 2)
+	{
+		fd_t fd;
+		if ((fd = sys_open(argv[1], FMODE_R, 0)) == FD_INVALID)
+		{
+			sys_puts("Failed to open \'", 100);
+			sys_puts(argv[1], 100);
+			sys_puts("\'\r\n", 3);
+			return -1;
+		}
+
+
+		while((readsiz = sys_read(fd, (uint8_t*)printbuf, 64)) != RW_INVALID)
+		{
+			if(readsiz == 0)
+				break;
+
+			sys_puts(printbuf, readsiz);
+		}
+
+		sys_close(fd);
+		return 0;
+	}
+
+	sys_puts("Invalid arguments.\r\n", 100);
+	return -1;
+}
+
+int ls_main(char* argv[], int argc)
+{
+	char fnamebuf[32];
+
+	sys_rwdir();
+
+	while(sys_listdir(fnamebuf, 32))
+	{
+		sys_puts(fnamebuf, 32);
+		sys_puts("\r\n", 2);
+	}
+
+	return 0;
+}
+
+int cd_main(char* argv[], int argc)
+{
+	if(argc == 2)
+	{
+		if(sys_chdir(argv[1]))
+			return 0;
+
+		sys_puts("Failed to chdir!\r\n", 100);
+		return -1;
+	}
+
+	sys_puts("Invalid arguments.\r\n", 100);
+	return -1;
+}
+
+int rm_main(char* argv[], int argc)
+{
+	bool failed = false;
+	if(argc > 1)
+	{
+		while(--argc)
+		{
+			if(!sys_unlink(argv[argc]))
+			{
+				failed = true;
+				sys_puts("Failed to remove \'", 100);
+				sys_puts(argv[argc], 100);
+				sys_puts("\'\r\n", 3);
+			}
+		}
+	}
+
+	if(failed)
+		return -1;
+	return 0;
+}
+
+int touch_main(char* argv[], int argc)
+{
+	bool failed = false;
+	fd_t fd;
+	if (argc > 1)
+	{
+		while (--argc)
+		{
+			if ((fd = sys_open(argv[argc], FMODE_W, FFLAG_CREAT)) == FD_INVALID)
+			{
+				failed = true;
+				sys_puts("Failed to create \'", 100);
+				sys_puts(argv[argc], 100);
+				sys_puts("\'\r\n", 3);
+			}
+
+			sys_close(fd);
+		}
+	}
+
+	if (failed)
+		return -1;
+	return 0;
+}
+
+int mkdir_main(char* argv[], int argc)
+{
+	bool failed = false;
+	if (argc > 1)
+	{
+		while (--argc)
+		{
+			if (sys_mkdir(argv[argc]))
+			{
+				failed = true;
+				sys_puts("Failed to create directory \'", 100);
+				sys_puts(argv[argc], 100);
+				sys_puts("\'\r\n", 3);
+			}
+		}
+	}
+
+	if (failed)
+		return -1;
+	return 0;
+}
+
 int read_main(char* argv[], int argc)
 {
 	fd_t fd;
