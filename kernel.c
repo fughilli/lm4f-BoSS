@@ -279,13 +279,15 @@ static void kernel_handle_syscall()
 		break;
 
 	case SYSCALL_PUTS:
+		// TODO: VULNERABILITY
 		Serial_puts(UART_DEBUG_MODULE, (char*) thread_current->regs.R1, thread_current->regs.R2);
 		kernel_run(thread_current);
 		break;
 
 	case SYSCALL_LOCK:
 		// If the lock is already taken, return 0 and resume the spinlock
-		// TODO: check for nullptr
+		// TODO: VULNERABILITY check for existence inside program memory bounds;
+		// this can be used to set arbitrary memory locations in privileged mode
 		if (*((lock_t*) thread_current->regs.R1))
 		{
 			thread_current->regs.R0 = false;
@@ -342,6 +344,7 @@ static void kernel_handle_syscall()
 		break;
 
 	case SYSCALL_KILL:
+		// TODO: VULNERABILITY
 		child_thread = tt_entry_for_tid((tid_t)thread_current->regs.R1);
 		if(child_thread)
 		{
@@ -355,6 +358,7 @@ static void kernel_handle_syscall()
 		kernel_run(thread_current);
 
 	case SYSCALL_RESET:
+		// TODO: VULNERABILITY
 		// Print a reset message and then initiate a software reset
 		Serial_puts(UART_DEBUG_MODULE, __k_r_str, fast_strlen(__k_r_str));
 		Serial_puts(UART_DEBUG_MODULE, __k_kp_str_nl, fast_strlen(__k_kp_str_nl));
@@ -381,6 +385,7 @@ static void kernel_handle_syscall()
 		break;
 
 	case SYSCALL_READ:
+		// TODO: VULNERABILITY
 		thread_current->regs.R0 = (uint32_t) read(
 				(fd_t) thread_current->regs.R1,
 				(uint8_t*) thread_current->regs.R2,
@@ -389,6 +394,7 @@ static void kernel_handle_syscall()
 		break;
 
 	case SYSCALL_WRITE:
+		// TODO: VULNERABILITY
 		thread_current->regs.R0 = (uint32_t) write(
 				(fd_t) thread_current->regs.R1,
 				(const uint8_t*) thread_current->regs.R2,
@@ -397,6 +403,7 @@ static void kernel_handle_syscall()
 		break;
 
 	case SYSCALL_IOCTL:
+		// TODO: VULNERABILITY
 		thread_current->regs.R0 = (uint32_t) ioctl(
 						(fd_t) thread_current->regs.R1,
 						(uint32_t) thread_current->regs.R2,
@@ -405,6 +412,7 @@ static void kernel_handle_syscall()
 		break;
 
 	case SYSCALL_SPAWN:
+		// TODO: VULNERABILITY
 		thread_current->regs.R0 = (uint32_t) thread_spawn(
 				(void(*)(void*)) thread_current->regs.R1,
 				(void*) thread_current->regs.R2);
