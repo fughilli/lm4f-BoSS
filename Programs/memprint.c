@@ -29,6 +29,8 @@ int memmanip_main(char* argv[], int argc)
 	{
 
 	}
+
+	return 0;
 }
 
 int memprint_main(char* argv[], int argc)
@@ -67,7 +69,7 @@ int memprint_main(char* argv[], int argc)
 		for (; base < end; base += 8)
 		{
 			uint8_t* memseg = (uint8_t*) base;
-			fast_snprintf(prstr, 32, "0x%08x:\t", base);
+			fast_snprintf(prstr, 32, "0x%08x:\t", (unsigned int)base);
 			sys_puts(prstr, fast_strlen(prstr));
 
 			// Print the hex
