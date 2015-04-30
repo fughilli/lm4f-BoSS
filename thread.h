@@ -14,11 +14,14 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "file.h"
 
-#define MAX_THREADS (8)
+#define MAX_THREADS (12)
 //#define THREAD_MEM_SIZE (512)
 #define LOG2_THREAD_MEM_SIZE (9)
 #define THREAD_MEM_SIZE (1<<LOG2_THREAD_MEM_SIZE)
+
+#define THREAD_MAX_OPEN_FDS (8)
 
 typedef uint32_t tid_t;
 typedef uint32_t tstate_t;
@@ -61,6 +64,10 @@ typedef struct
 	uint32_t PSR;
 }__attribute__((aligned(0x4))) registers_t;
 
+typedef bool(*twait_func_t)(void);
+
+#define WAITING_ON_THREAD ((twait_func_t)(-1))
+
 typedef struct
 {
 	// Thread ID
@@ -77,6 +84,10 @@ typedef struct
 
 	// Thread registers
 	registers_t regs;
+
+	twait_func_t wait_func;
+
+	fd_t open_fds[THREAD_MAX_OPEN_FDS];
 } thread_t;
 
 extern thread_t thread_table[];
@@ -92,5 +103,7 @@ bool thread_fork(thread_t* thread);
 bool thread_fork2(thread_t* thread, thread_t** rthread);
 uint32_t thread_pos(const thread_t* thread);
 bool thread_valid(const thread_t* thread);
+void thread_notify_waiting(thread_t* thread);
+thread_t* tt_entry_for_tid(tid_t id);
 
 #endif /* THREAD_H_ */

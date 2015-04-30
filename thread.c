@@ -20,7 +20,7 @@ uint8_t thread_mem[MAX_THREADS][THREAD_MEM_SIZE] __attribute__((aligned(THREAD_M
 /**
  * Search the thread table for an entry with a matching pid
 **/
-static thread_t* tt_entry_for_tid(tid_t id)
+thread_t* tt_entry_for_tid(tid_t id)
 {
 	int i;
 	for(i = 0; i < MAX_THREADS; i++)
@@ -81,11 +81,18 @@ bool thread_valid(const thread_t* thread)
 void thread_init(void)
 {
 	tid_counter = 0;
-	int i;
+	int i, j;
 	for(i = 0; i < MAX_THREADS; i++)
 	{
 		thread_table[i].id = 0;
 		thread_table[i].state = T_EMPTY;
+
+		thread_table[i].wait_func = NULL;
+
+		for(j = 0; j < THREAD_MAX_OPEN_FDS; j++)
+		{
+			thread_table[i].open_fds[j] = FD_INVALID;
+		}
 
 		//memset(&thread_table[i].regs, 0, sizeof(registers_t));
 //		for(j = 0; j < sizeof(registers_t); j++)
@@ -198,4 +205,25 @@ bool thread_fork2(thread_t* thread, thread_t** rt)
     }
 
     return false;
+}
+
+// Find all blocked threads waiting on the arg, thread, and wake them up
+// Also pass them the return value of the arg
+void thread_notify_waiting(thread_t* thread)
+{
+	if(!thread_valid(thread))
+		return;
+
+	int i;
+
+	for(i = 0; i < MAX_THREADS; i++)
+	{
+		if((thread_table[i].state == T_BLOCKED) &&
+		   (thread_table[i].wait_func == WAITING_ON_THREAD) &&
+		   (((tid_t)thread_table[i].regs.R1) == thread->id))
+		{
+			thread_table[i].regs.R0 = thread->regs.R1;
+			thread_table[i].state = T_RUNNABLE;
+		}
+	}
 }
