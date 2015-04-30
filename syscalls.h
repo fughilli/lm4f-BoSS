@@ -12,6 +12,7 @@
 #include "syscall_numbers.h"
 #include "file.h"
 #include <stdint.h>
+#include "fast_utils.h"
 
 //			"mov R0,#0\n\t"
 //			"mov R1,#1\n\t"
@@ -68,6 +69,32 @@ inline void sys_yield()
 			"svc $0x80"
 			: : "r" (SYSCALL_YIELD) : "memory"
 	);
+}
+
+inline int32_t sys_wait(fd_t fd)
+{
+	int32_t ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) : "r" (SYSCALL_WAIT), "r" (fd) : "memory"
+	);
+	return ret;
+}
+
+inline bool sys_kill(tid_t tid)
+{
+	bool ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) : "r" (SYSCALL_KILL), "r" (tid) : "memory"
+	);
+	return ret;
 }
 
 inline void sys_putc(char c)
@@ -203,7 +230,7 @@ inline int32_t sys_read(fd_t fd, uint8_t* buf, int32_t len)
 			"svc $0x80\n\t"
 			"mov %0,R0"
 			: "=r" (ret) :
-			"r" (SYSCALL_READ), "r" (fd), "r" (buf), "r" (len) : "memory", "0", "1", "2", "3", "4"
+			"r" (SYSCALL_READ), "r" (fd), "r" (buf), "r" (len) : "memory", "0", "1", "2", "3"
 	);
 	return ret;
 }
@@ -219,7 +246,7 @@ inline int32_t sys_write(fd_t fd, const uint8_t* buf, int32_t len)
 			"svc $0x80\n\t"
 			"mov %0,R0"
 			: "=r" (ret) :
-			"r" (SYSCALL_WRITE), "r" (fd), "r" (buf), "r" (len) : "memory", "0", "1", "2", "3", "4"
+			"r" (SYSCALL_WRITE), "r" (fd), "r" (buf), "r" (len) : "memory", "0", "1", "2", "3"
 	);
 	return ret;
 }
@@ -250,7 +277,89 @@ inline uint32_t sys_ioctl(fd_t fd, uint32_t mask, void* arg)
 			"svc $0x80\n\t"
 			"mov %0,R0"
 			: "=r" (ret) :
-			"r" (SYSCALL_IOCTL), "r" (fd), "r" (mask), "r" (arg) : "memory", "0", "1", "2", "3", "4"
+			"r" (SYSCALL_IOCTL), "r" (fd), "r" (mask), "r" (arg) : "memory", "0", "1", "2", "3"
+	);
+	return ret;
+}
+
+inline fd_t sys_open(const char* fname, fmode_t mode, fflags_t flags)
+{
+	fd_t ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"mov R2,%3\n\t"
+			"mov R3,%4\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) :
+			"r" (SYSCALL_OPEN), "r" (fname), "r" (mode), "r" (flags) : "memory", "0", "1", "2", "3"
+	);
+	return ret;
+}
+
+inline bool sys_listdir(char* fnamebuf, size_t fnamebuflen)
+{
+	bool ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"mov R2,%3\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) :
+			"r" (SYSCALL_LISTDIR), "r" ((uint32_t)fnamebuf), "r" (fnamebuflen) : "memory", "0", "1", "2"
+	);
+	return ret;
+}
+
+inline void sys_rwdir()
+{
+	asm volatile (
+			"mov R0,%0\n\t"
+			"svc $0x80"
+			: : "r" (SYSCALL_RWDIR) : "memory"
+	);
+}
+
+inline bool sys_chdir(const char* dirname)
+{
+	bool ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) :
+			"r" (SYSCALL_CHDIR), "r" ((uint32_t)dirname) : "memory", "0", "1"
+	);
+	return ret;
+}
+
+inline bool sys_mkdir(const char* dirname)
+{
+	bool ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) :
+			"r" (SYSCALL_MKDIR), "r" ((uint32_t)dirname) : "memory", "0", "1"
+	);
+	return ret;
+}
+
+inline bool sys_unlink(const char* fname)
+{
+	bool ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) :
+			"r" (SYSCALL_UNLINK), "r" ((uint32_t)fname) : "memory", "0", "1"
 	);
 	return ret;
 }
