@@ -87,7 +87,22 @@ typedef struct
 
 	twait_func_t wait_func;
 
+	// This struct contains the fds for the files
+	// associated with this thread. SYSCALL_* that
+	// manipulate files should reference this array
+	// to figure out which system fd to modify;
+	// (e.g., a call to sys_write(3, ...) should
+	// look up the system fd from open_fds[0], and
+	// a call to sys_write(1, ...) should write to
+	// stdout)
+	//
+	// These should be sys_close'd at the program exit.
 	fd_t open_fds[THREAD_MAX_OPEN_FDS];
+
+	// These should be linked up at program start.
+	fd_t stdout;
+	fd_t stdin;
+	fd_t stderr;
 } thread_t;
 
 extern thread_t thread_table[];
