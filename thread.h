@@ -111,6 +111,7 @@ extern uint8_t thread_mem[][THREAD_MEM_SIZE];
 
 void thread_init(void);
 tid_t thread_spawn(void (*entry)(void*), void* arg);
+tid_t thread_spawn2(void (*entry)(void*), void* arg, fd_t stdin, fd_t stdout, fd_t stderr);
 bool thread_kill(thread_t* thread);
 bool thread_kill2(tid_t tid);
 bool thread_copy(thread_t* dest, const thread_t* src);

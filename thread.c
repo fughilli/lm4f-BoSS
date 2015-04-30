@@ -133,7 +133,29 @@ tid_t thread_spawn(void (*entry)(void*), void* arg)
     thread_table[i].pri = 1;
     thread_table[i].scnt = 0;
 
+    // Setup the file descriptor table to invalid fds
+    fast_memset(thread_table[i].open_fds, 0xFF, THREAD_MAX_OPEN_FDS * sizeof(fd_t));
+
+    // Initialize stdin, stdout, stderr to invalid
+    thread_table[i].stdin = thread_table[i].stdout = thread_table[i].stderr = -1;
+
     return thread_table[i].id;
+}
+
+tid_t thread_spawn2(void (*entry)(void*), void* arg, fd_t stdin, fd_t stdout, fd_t stderr)
+{
+	tid_t res = thread_spawn(entry, arg);
+
+	// If the thread was spawned
+	if(res)
+	{
+		thread_t* thread = tt_entry_for_tid(res);
+		thread->stdin = stdin;
+		thread->stdout = stdout;
+		thread->stderr = stderr;
+	}
+
+	return res;
 }
 
 bool thread_kill(thread_t* thread)
