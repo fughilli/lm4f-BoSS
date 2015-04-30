@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "file.h"
+#include "fast_utils.h"
 
 typedef int32_t fsys_t;
 
@@ -23,15 +24,19 @@ typedef int32_t fsys_t;
 typedef struct
 {
 	void (*unmount)(fsys_t);
-	bool (*listdir)(char*, uint32_t);
-	bool (*touch)(const char*);
+	bool (*listdir)(char*, size_t);
+	void (*rwdir)(void);
 	fd_t (*open)(const char*,fmode_t,fflags_t);
+	bool (*chdir)(const char*);
+	bool (*unlink)(const char*);
+	bool (*mkdir)(const char*);
 } fsys_funmap_t;
 
 typedef struct
 {
 	void* fsysdata;
 	const fsys_funmap_t* funmap;
+	const char* mountpoint;
 } fsys_assoc_t;
 
 // The filesystem table; holds all open fsys associations
@@ -47,10 +52,12 @@ void fsystable_init();
 // associated file descriptor (fd) when they are
 // open. This fd is allocated by the *_open
 // functions
-void close(fd_t fd);
 fd_t open(const char* fname, fmode_t mode, fflags_t flags);
-bool touch(const char* fname);
-bool listdir(char* fnamebuf, uint32_t fnblen);
+bool listdir(char* fnamebuf, size_t fnblen);
+void rwdir(void);
 void unmount(fsys_t fsys);
+bool chdir(const char* dirname);
+bool mkdir(const char* dirname);
+bool unlink(const char* fname);
 
 #endif /* FSYSTEM_H_ */
