@@ -26,7 +26,9 @@ void fast_memset(void* dst, uint8_t val, size_t sz);
 int fast_memcmp(const void* ptr1, const void* ptr2, size_t sz);
 
 size_t fast_strlen(const char* str);
+size_t fast_strnlen(const char* str, size_t maxlen);
 size_t fast_strcpy(char* stra, const char* strb);
+size_t fast_strncpy(char* stra, const char* strb, size_t maxlen);
 int fast_strcmp(const char* stra, const char* strb);
 
 

@@ -76,6 +76,14 @@ size_t fast_strlen(const char* str)
 	return ret;
 }
 
+size_t fast_strnlen(const char* str, size_t maxlen)
+{
+	size_t ret = 0;
+	while(str[ret] && (ret < maxlen))
+		ret++;
+	return ret;
+}
+
 int fast_memcmp(const void* ptr1, const void* ptr2, size_t sz)
 {
 	int8_t *a, *b;
@@ -96,6 +104,15 @@ int fast_memcmp(const void* ptr1, const void* ptr2, size_t sz)
 size_t fast_strcpy(char* stra, const char* strb)
 {
 	size_t ret = fast_strlen(strb);
+	fast_memcpy(stra, strb, ret+1);
+	return ret;
+}
+
+size_t fast_strncpy(char* stra, const char* strb, size_t maxlen)
+{
+	size_t ret = fast_strnlen(strb, maxlen);
+	if(ret < maxlen)
+		ret++;
 	fast_memcpy(stra, strb, ret);
 	return ret;
 }
