@@ -19,6 +19,7 @@
 #include "driverlib/mpu.h"
 #include "driverlib/gpio.h"
 #include "file.h"
+#include "fsystem.h"
 #include "os_config.h"
 
 #include <stdbool.h>
@@ -222,6 +223,8 @@ void kernel_run(thread_t* thread)
 
 			// Exception return
 			"_return_except:\n\t"
+			"dsb\n\t"
+			"isb\n\t"
 			"mov LR,$0xFFFFFFF9\n\t"
 			"bx LR"
 			: : "r" (&thread_current->regs.R4) : "memory" );
@@ -244,6 +247,7 @@ static void kernel_handle_syscall()
 		break;
 
 	case SYSCALL_EXIT:
+		thread_notify_waiting(thread_current);
 		thread_kill(thread_current);
 		kernel_schedule();
 		break;
@@ -337,6 +341,19 @@ static void kernel_handle_syscall()
 		}
 		break;
 
+	case SYSCALL_KILL:
+		child_thread = tt_entry_for_tid((tid_t)thread_current->regs.R1);
+		if(child_thread)
+		{
+			thread_notify_waiting(child_thread);
+			thread_current->regs.R0 = thread_kill(child_thread);
+		}
+		else
+		{
+			thread_current->regs.R0 = 0;
+		}
+		kernel_run(thread_current);
+
 	case SYSCALL_RESET:
 		// Print a reset message and then initiate a software reset
 		Serial_puts(UART_DEBUG_MODULE, __k_r_str, fast_strlen(__k_r_str));
@@ -393,6 +410,59 @@ static void kernel_handle_syscall()
 				(void*) thread_current->regs.R2);
 		kernel_schedule();
 		break;
+
+	case SYSCALL_WAIT:
+		thread_current->state = T_BLOCKED;
+		thread_current->wait_func = WAITING_ON_THREAD;
+		// The thread id that thread_current is waiting on
+		// is stored in R1
+		kernel_schedule();
+		break;
+
+	case SYSCALL_OPEN:
+		thread_current->regs.R0 = open((const char*) thread_current->regs.R1,
+				(fmode_t) thread_current->regs.R2,
+				(fflags_t) thread_current->regs.R3);
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_CLOSE:
+		close((fd_t) thread_current->regs.R1);
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_LISTDIR:
+		thread_current->regs.R0 = listdir((char*) thread_current->regs.R1,
+				(size_t) thread_current->regs.R2);
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_RWDIR:
+		rwdir();
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_CHDIR:
+		thread_current->regs.R0 = chdir((const char*)thread_current->regs.R1);
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_SEEK:
+		thread_current->regs.R0 = seek((fd_t)thread_current->regs.R1,
+				(int32_t)thread_current->regs.R2);
+		kernel_run(thread_current);
+		break;
+
+	case SYSCALL_MKDIR:
+			thread_current->regs.R0 = mkdir((const char*)thread_current->regs.R1);
+			kernel_run(thread_current);
+			break;
+
+	case SYSCALL_UNLINK:
+			thread_current->regs.R0 = unlink((const char*)thread_current->regs.R1);
+			kernel_run(thread_current);
+			break;
+
 	}
 
 	kernel_panic("unknown syscall", 15);
@@ -446,8 +516,9 @@ void svc_interrupt_handler()
 {
 	// Push the context of the trapping thread
 	asm volatile (
-			"dsb\n\t"
-			"isb\n\t"
+			//"dsb\n\t" <-- these should occur right before exceptional return
+			//"isb\n\t" 	to make sure that modifications to memory are reflected
+			//				before thread resume
 			// Push the remaining registers;
 			// R0,R1,R2,R3,R12,LR,PC+4,xPSR are pushed
 			// R7 is pushed on call entry
