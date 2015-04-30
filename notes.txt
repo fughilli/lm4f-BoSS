@@ -33,3 +33,77 @@ need to implement program loader:
 	
 need to update lock() and unlock() to use synchronization primitives listed on page 100
 	ss. 2.4.7 of tm4c123h6pm.pdf
+	
+need to implement better parser for shell grammar:
+	CMDX -> REDX
+	CMDX -> ORX
+	CMDX -> ANDX
+	CMDX -> PIPEX
+	REDX -> CMD "<" FILE
+	REDX -> CMD ">" FILE
+	FILE -> word
+	ORX -> CMD "||" ORX
+	ORX -> CMD
+	ANDX -> CMD "&&" ANDX
+	ANDX -> CMD
+	PIPEX -> CMD "|" PIPEX
+	PIPEX -> CMD
+	CMD -> PROG ARGS
+	PROG -> word
+	ARGS -> ARG ARGS
+	ARGS -> ARG
+	ARG -> word
+	
+need to determine how to handle immediate wait on a spawned/forked child:
+	sys_wait(sys_spawn(...)) <-- bad because child can complete before call to wait
+	
+	can try adding critical-section system call pair (entry - exit) that will lock out
+	threads of lower/same privilege
+	
+	
+Functions to implement for filesystems:
+void <fsysimpl>unmount(fsys_t fsys)
+{
+
+}
+
+bool <fsysimpl>listdir(char* fnamebuf, uint32_t fnamebuflen)
+{
+	return false;
+}
+
+bool <fsysimpl>touch(const char* fname)
+{
+	return false;
+}
+
+fd_t <fsysimpl>open(const char* fname, fmode_t mode, fflags_t flags)
+{
+	return FD_INVALID;
+}
+
+Functions to implement for files:
+void <fsysimpl>close(fd_t fd)
+{
+
+}
+
+int32_t <fsysimpl>read(fd_t fd, uint8_t* buf, int32_t len)
+{
+	return RW_INVALID;
+}
+
+int32_t <fsysimpl>write(fd_t fd, const uint8_t* buf, int32_t len)
+{
+	return RW_INVALID;
+}
+
+int32_t <fsysimpl>seek(fd_t fd, int32_t pos)
+{
+	return SEEK_INVALID;
+}
+
+uint32_t <fsysimpl>ioctl(fd_t fd, uint32_t mask, void* arg)
+{
+	return IOCTL_INVALID;
+}
