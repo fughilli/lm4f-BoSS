@@ -26,6 +26,10 @@ uint32_t shell_lineBufferIndex;
 uint32_t shell_lineBufferInsertIndex;
 
 char* shell_argBuffer[SHELL_MAX_ARGS];
+uint32_t shell_lineIndex, shell_argIndex;
+int lastret;
+
+char shell_varBuf[16];
 
 const char shell_error_too_many_args[] = "Parse error: too many arguments!";
 const char shell_error_unknown_command[] = "Error: unknown command \'";
@@ -33,20 +37,41 @@ const char shell_error_mismatched_quotes[] = "Error: mismatched quotes!";
 
 void shell_processLine(void);
 
+int shell_jobs_main(char* argv[], int argc);
+
 shell_progMapEntry_t shell_progMap[SHELL_MAX_PROGRAMS];
+
+int shell_help_main(char* argv[], int argc)
+{
+	Serial_puts(UART_DEBUG_MODULE, "The following programs are available:\r\n", 100);
+	int i;
+	for(i = 0; i < SHELL_MAX_PROGRAMS; i++)
+	{
+		if(fast_strlen(shell_progMap[i].name))
+		{
+			Serial_puts(UART_DEBUG_MODULE, shell_progMap[i].name, 100);
+			Serial_puts(UART_DEBUG_MODULE, "\r\n", 2);
+		}
+	}
+	return 0;
+}
 
 void shell_initProgMap()
 {
+	lastret = 0;
 	int i;
 	for (i = 0; i < SHELL_MAX_PROGRAMS; i++)
 	{
 		shell_progMap[i].name[0] = 0;
 	}
+
+	shell_registerProgram("help", shell_help_main);
+	shell_registerProgram("jobs", shell_jobs_main);
 }
 
 bool shell_registerProgram(const char* name, shell_func_t prog_main)
 {
-	if (fast_strlen(name) > SHELL_MAX_PROGRAM_NAMELEN - 1)
+	if (fast_strlen(name) > (SHELL_MAX_PROGRAM_NAMELEN - 1))
 		return false;
 
 	int i;
@@ -63,19 +88,28 @@ bool shell_registerProgram(const char* name, shell_func_t prog_main)
 	return false;
 }
 
-shell_func_t shell_getProg(const char* name)
+int shell_getProgIdx(const char* name)
 {
 	if (fast_strlen(name) > SHELL_MAX_PROGRAM_NAMELEN - 1)
-		return NULL;
+		return -1;
 
 	int i;
 	for (i = 0; i < SHELL_MAX_PROGRAMS; i++)
 	{
 		if (fast_strcmp(shell_progMap[i].name, name) == 0)
 		{
-			return shell_progMap[i].prog_main;
+			return i;
 		}
 	}
+
+	return -1;
+}
+
+shell_func_t shell_getProg(const char* name)
+{
+	int i = shell_getProgIdx(name);
+	if(i > 0)
+		return shell_progMap[i].prog_main;
 
 	return NULL;
 }
@@ -245,16 +279,107 @@ void shell_run_shim(void* arg)
 	sys_exit(ret);
 }
 
+typedef struct
+{
+	tid_t thread;
+	const char* program;
+} shell_job_t;
+
+#define SHELL_MAX_JOBS (4)
+
+shell_job_t shell_jobs[SHELL_MAX_JOBS];
+
+#define SHELL_JOB_VALID(_job_) (0 <= ((_job_) - shell_jobs) && ((_job_) - shell_jobs) < SHELL_MAX_JOBS && (_job_)->program != NULL)
+
+void shell_initJobs()
+{
+	int i;
+	for(i = 0; i < SHELL_MAX_JOBS; i++)
+	{
+		shell_jobs[i].program = NULL;
+	}
+}
+
+shell_job_t* shell_allocJob()
+{
+	int i;
+	for(i = 0; i < SHELL_MAX_JOBS; i++)
+	{
+		if(shell_jobs[i].program == NULL)
+			return &shell_jobs[i];
+	}
+
+	return NULL;
+}
+
+void shell_freeJob(shell_job_t* job)
+{
+	if(!SHELL_JOB_VALID(job))
+		return;
+
+	job->program = NULL;
+}
+
+void shell_job_waiter(void* arg)
+{
+	shell_job_t* job = (shell_job_t*)arg;
+	if(!SHELL_JOB_VALID(job))
+		sys_exit(-1);
+
+	int retval = sys_wait(job->thread);
+
+	char printbuf[32];
+	fast_snprintf(printbuf, 32, "[%d] done %d\t\t\'", (int)(job - shell_jobs), retval);
+	sys_puts(printbuf, 32);
+	sys_puts(job->program, 100);
+	sys_puts("\'\r\n", 3);
+
+	shell_freeJob(job);
+	sys_exit(0);
+}
+
+int shell_jobs_main(char* argv[], int argc)
+{
+	char printbuf[32];
+	int i;
+	for(i = 0; i < SHELL_MAX_JOBS; i++)
+	{
+		if(shell_jobs[i].program)
+		{
+			fast_snprintf(printbuf, 32, "[%d] running\t\t\'", i);
+			sys_puts(printbuf, 32);
+			sys_puts(shell_jobs[i].program, 100);
+			sys_puts("\'\r\n", 3);
+		}
+	}
+
+	return 0;
+}
+
+void shell_substitute_vars()
+{
+	fast_snprintf(shell_varBuf, 16, "%d", lastret);
+	uint32_t vari;
+	for(vari = 0; vari < shell_argIndex; vari++)
+	{
+		if(fast_strcmp(shell_argBuffer[vari], "$?") == 0)
+		{
+			shell_argBuffer[vari] = shell_varBuf;
+		}
+	}
+}
+
 void shell_processLine(void)
 {
 	// Initial term is at start of line
 	char* shell_startOfTerm = shell_lineBuffer;
 
 	char quoteChar = 0;
-	char lastChar = 0;
+
+	bool background = false;
 
 	// Find end of term (delimited on IFS)
-	uint32_t shell_lineIndex, shell_argIndex = 0;
+	shell_argIndex = 0;
 	for (shell_lineIndex = 0; shell_lineIndex < shell_lineBufferIndex;
 			shell_lineIndex++)
 	{
@@ -320,18 +445,49 @@ void shell_processLine(void)
 	}
 
 	shell_run_shim_params_t shim_params;
-	if ((shim_params.func = shell_getProg(shell_argBuffer[0])))
+	int progidx = shell_getProgIdx(shell_argBuffer[0]);
+	if (progidx > 0)
 	{
+		if(fast_strcmp(shell_argBuffer[shell_argIndex - 1], "&") == 0)
+		{
+			background = true;
+			shell_argIndex--;
+		}
+
+		shim_params.func = shell_progMap[progidx].prog_main;
 		shim_params.argc = shell_argIndex;
 		shim_params.argv = shell_argBuffer;
 
-		while (!sys_lock(&shim_print_lock))
-			sys_sleep(10);
+		shell_substitute_vars();
 
-		sys_spawn(shell_run_shim, &shim_params);
+		tid_t tid = sys_spawn(shell_run_shim, &shim_params);
 
-		while (shim_print_lock)
-			sys_sleep(10);
+		//TODO: Fix max jobs problem; handle job == NULL properly
+
+		if(!background)
+		{
+			lastret = sys_wait(tid);
+		}
+		else
+		{
+			background = false;
+			shell_job_t* job = shell_allocJob();
+			if (job != NULL)
+			{
+				job->thread = tid;
+				job->program = shell_progMap[progidx].name;
+				sys_spawn(shell_job_waiter, job);
+				char printbuf[32];
+				fast_snprintf(printbuf, 32, "[%d] %d\r\n", (int)(job - shell_jobs),
+						(int)tid);
+				sys_puts(printbuf, 32);
+			}
+			else
+			{
+				sys_puts("Exceeded max jobs!\r\n", 100);
+			}
+		}
+
 	}
 	else
 	{
