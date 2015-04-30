@@ -193,6 +193,18 @@ void kernel_schedule()
 	}
 }
 
+void kernel_close_fds(thread_t* thread)
+{
+	if(!thread)
+		return;
+
+	int i;
+	for(i = 0; i < THREAD_MAX_OPEN_FDS; i++)
+	{
+		close(thread->open_fds[i]);
+	}
+}
+
 __attribute__((noreturn))
 void kernel_run(thread_t* thread)
 {
@@ -248,6 +260,7 @@ static void kernel_handle_syscall()
 
 	case SYSCALL_EXIT:
 		thread_notify_waiting(thread_current);
+		kernel_close_fds(thread_current);
 		thread_kill(thread_current);
 		kernel_schedule();
 		break;
@@ -349,6 +362,7 @@ static void kernel_handle_syscall()
 		if(child_thread)
 		{
 			thread_notify_waiting(child_thread);
+			kernel_close_fds(thread_current);
 			thread_current->regs.R0 = thread_kill(child_thread);
 		}
 		else
