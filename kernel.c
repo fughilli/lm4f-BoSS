@@ -24,6 +24,10 @@
 
 #include <stdbool.h>
 
+#define KERNEL_DEFAULT_STDIN (0)
+#define KERNEL_DEFAULT_STDOUT (1)
+#define KERNEL_DEFAULT_STDERR (2)
+
 #define _SECTION_DECLARE(_typedecl_,_symbol_,_arrs_,_val_,_section_) _typedecl_ (_symbol_) _arrs_ __attribute__((section("#_section"))) = (_val_)
 #define _SECTION_STRING(_symbol_,_string_,_section_) _SECTION_DECLARE(const char,_symbol_,[],_string_,_section_)
 #define _FLASH_STRING(_symbol_,_string_) _SECTION_STRING(_symbol_,_string_,FLASH)
@@ -199,7 +203,8 @@ void kernel_close_fds(thread_t* thread)
 		return;
 
 	int i;
-	for(i = 0; i < THREAD_MAX_OPEN_FDS; i++)
+	// Skip over stdin, stdout, stderr
+	for(i = 2; i < THREAD_MAX_OPEN_FDS; i++)
 	{
 		close(thread->open_fds[i]);
 	}
@@ -401,7 +406,7 @@ static void kernel_handle_syscall()
 	case SYSCALL_READ:
 		// TODO: VULNERABILITY
 		thread_current->regs.R0 = (uint32_t) read(
-				(fd_t) thread_current->regs.R1,
+				thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R1),
 				(uint8_t*) thread_current->regs.R2,
 				(int32_t) thread_current->regs.R3);
 		kernel_schedule();
@@ -410,7 +415,7 @@ static void kernel_handle_syscall()
 	case SYSCALL_WRITE:
 		// TODO: VULNERABILITY
 		thread_current->regs.R0 = (uint32_t) write(
-				(fd_t) thread_current->regs.R1,
+				thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R1),
 				(const uint8_t*) thread_current->regs.R2,
 				(int32_t) thread_current->regs.R3);
 		kernel_schedule();
@@ -419,7 +424,7 @@ static void kernel_handle_syscall()
 	case SYSCALL_IOCTL:
 		// TODO: VULNERABILITY
 		thread_current->regs.R0 = (uint32_t) ioctl(
-						(fd_t) thread_current->regs.R1,
+				thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R1),
 						(uint32_t) thread_current->regs.R2,
 						(void*) thread_current->regs.R3);
 		kernel_schedule();
@@ -427,9 +432,23 @@ static void kernel_handle_syscall()
 
 	case SYSCALL_SPAWN:
 		// TODO: VULNERABILITY
-		thread_current->regs.R0 = (uint32_t) thread_spawn(
+		thread_current->regs.R0 = (uint32_t) thread_spawn2(
 				(void(*)(void*)) thread_current->regs.R1,
-				(void*) thread_current->regs.R2);
+				(void*) thread_current->regs.R2,
+				KERNEL_DEFAULT_STDIN,
+				KERNEL_DEFAULT_STDOUT,
+				KERNEL_DEFAULT_STDERR);
+		kernel_schedule();
+		break;
+
+	case SYSCALL_SPAWN2:
+		// TODO: VULNERABILITY
+		thread_current->regs.R0 = (uint32_t) thread_spawn2(
+				(void (*)(void*)) thread_current->regs.R1,
+				(void*) thread_current->regs.R2,
+				(fd_t) thread_current->regs.R3,
+				(fd_t) thread_current->regs.R4,
+				(fd_t) thread_current->regs.R5);
 		kernel_schedule();
 		break;
 
@@ -442,14 +461,22 @@ static void kernel_handle_syscall()
 		break;
 
 	case SYSCALL_OPEN:
-		thread_current->regs.R0 = open((const char*) thread_current->regs.R1,
-				(fmode_t) thread_current->regs.R2,
-				(fflags_t) thread_current->regs.R3);
+		// TODO: check if the thread has an open fd slot
+		// then open the file and save the fd to the slot
+		// finally, pass back the index to the slot
+		if ((thread_current->regs.R0 = thread_get_free_fd(thread_current))
+				!= FD_INVALID)
+		{
+			thread_current->regs.R0 = thread_alloc_fd(thread_current,
+					open((const char*) thread_current->regs.R1,
+							(fmode_t) thread_current->regs.R2,
+							(fflags_t) thread_current->regs.R3));
+		}
 		kernel_run(thread_current);
 		break;
 
 	case SYSCALL_CLOSE:
-		close((fd_t) thread_current->regs.R1);
+		close(thread_free_fd(thread_current, (fd_t) thread_current->regs.R1));
 		kernel_run(thread_current);
 		break;
 
@@ -470,7 +497,7 @@ static void kernel_handle_syscall()
 		break;
 
 	case SYSCALL_SEEK:
-		thread_current->regs.R0 = seek((fd_t)thread_current->regs.R1,
+		thread_current->regs.R0 = seek(thread_lookup_fd(thread_current, (fd_t)thread_current->regs.R1),
 				(int32_t)thread_current->regs.R2);
 		kernel_run(thread_current);
 		break;
