@@ -374,7 +374,25 @@ inline tid_t sys_spawn(void (*entry)(void*), void* arg)
 			"svc $0x80\n\t"
 			"mov %0,R0"
 			: "=r" (ret) :
-			"r" (SYSCALL_SPAWN), "r" (entry), "r" (arg) : "memory", "0", "1", "2", "3"
+			"r" (SYSCALL_SPAWN), "r" (entry), "r" (arg) : "memory", "0", "1", "2"
+	);
+	return ret;
+}
+
+inline tid_t sys_spawn2(void (*entry)(void*), void* arg, fd_t stdin, fd_t stdout, fd_t stderr)
+{
+	tid_t ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"mov R2,%3\n\t"
+			"mov R3,%4\n\t"
+			"mov R4,%5\n\t"
+			"mov R5,%6\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) :
+			"r" (SYSCALL_SPAWN), "r" (entry), "r" (arg), "r" (stdin), "r" (stdout), "r" (stderr) : "memory", "0", "1", "2", "3", "4", "5"
 	);
 	return ret;
 }
