@@ -96,13 +96,10 @@ typedef struct
 	// a call to sys_write(1, ...) should write to
 	// stdout)
 	//
-	// These should be sys_close'd at the program exit.
+	// These should be sys_close'd at the program exit,
+	// except for 0,1,2 which are stdin, stdout, and
+	// stderr, respectively, and could be shared.
 	fd_t open_fds[THREAD_MAX_OPEN_FDS];
-
-	// These should be linked up at program start.
-	fd_t stdout;
-	fd_t stdin;
-	fd_t stderr;
 } thread_t;
 
 extern thread_t thread_table[];
@@ -121,5 +118,9 @@ uint32_t thread_pos(const thread_t* thread);
 bool thread_valid(const thread_t* thread);
 void thread_notify_waiting(thread_t* thread);
 thread_t* tt_entry_for_tid(tid_t id);
+fd_t thread_get_free_fd(thread_t* thread);
+fd_t thread_alloc_fd(thread_t* thread, fd_t sysfd);
+fd_t thread_free_fd(thread_t* thread, fd_t threadfd);
+fd_t thread_lookup_fd(thread_t* thread, fd_t threadfd);
 
 #endif /* THREAD_H_ */

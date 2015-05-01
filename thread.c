@@ -17,6 +17,10 @@ tid_t tid_counter;
 // so that the MPU can be used to protect it
 uint8_t thread_mem[MAX_THREADS][THREAD_MEM_SIZE] __attribute__((aligned(THREAD_MEM_SIZE)));
 
+// stdin, stdout, sderr are exceptions
+#define THREADFD_VALID(_tfd_) ((_tfd_) >= 0 && (_tfd_) < (THREAD_MAX_OPEN_FDS))
+#define THREADFD_VALID_AND_NOT_STD(_tfd_) ((_tfd_) > 2 && (_tfd_) < (THREAD_MAX_OPEN_FDS))
+
 /**
  * Search the thread table for an entry with a matching pid
 **/
@@ -134,12 +138,58 @@ tid_t thread_spawn(void (*entry)(void*), void* arg)
     thread_table[i].scnt = 0;
 
     // Setup the file descriptor table to invalid fds
-    fast_memset(thread_table[i].open_fds, 0xFF, THREAD_MAX_OPEN_FDS * sizeof(fd_t));
-
-    // Initialize stdin, stdout, stderr to invalid
-    thread_table[i].stdin = thread_table[i].stdout = thread_table[i].stderr = -1;
+    int j;
+	for (j = 0; j < THREAD_MAX_OPEN_FDS; j++)
+	{
+		thread_table[i].open_fds[j] = FD_INVALID;
+	}
 
     return thread_table[i].id;
+}
+
+fd_t thread_get_free_fd(thread_t* thread)
+{
+	int threadfd;
+	// Skip over stdin, stdout, stderr
+	for(threadfd = 2; threadfd < THREAD_MAX_OPEN_FDS; threadfd++)
+	{
+		if(thread->open_fds[threadfd] == FD_INVALID)
+			return threadfd;
+	}
+	return FD_INVALID;
+}
+
+fd_t thread_alloc_fd(thread_t* thread, fd_t sysfd)
+{
+	if(!FD_VALID(sysfd))
+		return FD_INVALID;
+
+	int freefd;
+	if((freefd = thread_get_free_fd(thread)) != FD_INVALID)
+	{
+		thread->open_fds[freefd] = sysfd;
+		return freefd;
+	}
+	return FD_INVALID;
+}
+
+fd_t thread_free_fd(thread_t* thread, fd_t threadfd)
+{
+	if(!THREADFD_VALID_AND_NOT_STD(threadfd))
+		return FD_INVALID;
+
+	fd_t sysfd = thread->open_fds[threadfd];
+	thread->open_fds[threadfd] = FD_INVALID;
+	return sysfd;
+}
+
+fd_t thread_lookup_fd(thread_t* thread, fd_t threadfd)
+{
+	if(!THREADFD_VALID(threadfd))
+		return FD_INVALID;
+
+	fd_t sysfd = thread->open_fds[threadfd];
+	return sysfd;
 }
 
 tid_t thread_spawn2(void (*entry)(void*), void* arg, fd_t stdin, fd_t stdout, fd_t stderr)
@@ -150,9 +200,9 @@ tid_t thread_spawn2(void (*entry)(void*), void* arg, fd_t stdin, fd_t stdout, fd
 	if(res)
 	{
 		thread_t* thread = tt_entry_for_tid(res);
-		thread->stdin = stdin;
-		thread->stdout = stdout;
-		thread->stderr = stderr;
+		thread->open_fds[0] = stdin;
+		thread->open_fds[1] = stdout;
+		thread->open_fds[2] = stderr;
 	}
 
 	return res;
