@@ -7,6 +7,7 @@
 
 #include "driver_debuguart.h"
 #include "../debug_serial.h"
+#include "../fast_utils.h"
 
 void debuguart_init()
 {
@@ -47,8 +48,8 @@ uint32_t debuguart_ioctl(fd_t fd, uint32_t mask, void* arg)
 const fd_funmap_t debuguart_funmap =
 {
 	.close = debuguart_close,
-	.ioctl = NONE,
-	.seek = NONE,
+	.ioctl = NULL,
+	.seek = NULL,
 	.read = debuguart_read,
 	.write = debuguart_write
 };
