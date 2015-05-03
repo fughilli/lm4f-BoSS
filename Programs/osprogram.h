@@ -47,6 +47,7 @@ extern inline bool sys_chdir(const char* dirname);
 extern inline bool sys_mkdir(const char* dirname);
 extern inline bool sys_unlink(const char* fname);
 extern inline tid_t sys_spawn(void (*entry)(void*), void* arg);
+extern inline tid_t sys_spawn2(void (*entry)(void*), void* arg, fd_t stdin, fd_t stdout, fd_t stderr);
  __attribute__((noreturn()))
  extern inline void sys_exit(int status);
  __attribute__((noreturn()))
