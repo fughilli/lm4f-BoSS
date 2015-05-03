@@ -83,19 +83,19 @@ int echo_main(char* argv[], int argc)
 						{
 							placechr = curchr;
 						}
-						sys_putc(placechr);
+						sys_write(1, &placechr, 1);
 					}
 					argv[i]++;
 				}
 			}
 			else
-				sys_puts(argv[i], fast_strlen(argv[i]));
+				sys_write(1, argv[i], fast_strlen(argv[i]));
 			i++;
 			if(i < argc)
-				sys_putc(' ');
+				sys_write(1, " ", 1);
 		}
 	}
 	if(!nonewline)
-		sys_puts("\r\n", 2);
+		sys_write(1, "\r\n", 2);
     return 0;
 }
