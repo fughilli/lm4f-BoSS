@@ -89,9 +89,9 @@ int cat_main(char* argv[], int argc)
 		fd_t fd;
 		if ((fd = sys_open(argv[1], FMODE_R, 0)) == FD_INVALID)
 		{
-			sys_puts("Failed to open \'", 100);
-			sys_puts(argv[1], 100);
-			sys_puts("\'\r\n", 3);
+			s_puts("Failed to open \'");
+			s_puts(argv[1]);
+			s_puts("\'\r\n");
 			return -1;
 		}
 
@@ -101,14 +101,14 @@ int cat_main(char* argv[], int argc)
 			if(readsiz == 0)
 				break;
 
-			sys_puts(printbuf, readsiz);
+			sys_write(STDOUT, printbuf, readsiz);
 		}
 
 		sys_close(fd);
 		return 0;
 	}
 
-	sys_puts("Invalid arguments.\r\n", 100);
+	s_puts("Invalid arguments.\r\n");
 	return -1;
 }
 
@@ -120,8 +120,8 @@ int ls_main(char* argv[], int argc)
 
 	while(sys_listdir(fnamebuf, 32))
 	{
-		sys_puts(fnamebuf, 32);
-		sys_puts("\r\n", 2);
+		s_puts(fnamebuf);
+		s_puts("\r\n");
 	}
 
 	return 0;
@@ -134,11 +134,11 @@ int cd_main(char* argv[], int argc)
 		if(sys_chdir(argv[1]))
 			return 0;
 
-		sys_puts("Failed to chdir!\r\n", 100);
+		s_puts("Failed to chdir!\r\n");
 		return -1;
 	}
 
-	sys_puts("Invalid arguments.\r\n", 100);
+	s_puts("Invalid arguments.\r\n");
 	return -1;
 }
 
@@ -152,9 +152,9 @@ int rm_main(char* argv[], int argc)
 			if(!sys_unlink(argv[argc]))
 			{
 				failed = true;
-				sys_puts("Failed to remove \'", 100);
-				sys_puts(argv[argc], 100);
-				sys_puts("\'\r\n", 3);
+				s_puts("Failed to remove \'");
+				s_puts(argv[argc]);
+				s_puts("\'\r\n");
 			}
 		}
 	}
@@ -175,9 +175,9 @@ int touch_main(char* argv[], int argc)
 			if ((fd = sys_open(argv[argc], FMODE_W, FFLAG_CREAT)) == FD_INVALID)
 			{
 				failed = true;
-				sys_puts("Failed to create \'", 100);
-				sys_puts(argv[argc], 100);
-				sys_puts("\'\r\n", 3);
+				s_puts("Failed to create \'");
+				s_puts(argv[argc]);
+				s_puts("\'\r\n");
 			}
 
 			sys_close(fd);
@@ -196,12 +196,12 @@ int mkdir_main(char* argv[], int argc)
 	{
 		while (--argc)
 		{
-			if (sys_mkdir(argv[argc]))
+			if (!sys_mkdir(argv[argc]))
 			{
 				failed = true;
-				sys_puts("Failed to create directory \'", 100);
-				sys_puts(argv[argc], 100);
-				sys_puts("\'\r\n", 3);
+				s_puts("Failed to create directory \'");
+				s_puts(argv[argc]);
+				s_puts("\'\r\n");
 			}
 		}
 	}
@@ -239,11 +239,11 @@ int read_main(char* argv[], int argc)
 
 	__read_fail_too_many_bytes:
 
-	sys_puts("Max read size is 64 bytes.\r\n", 100);
+	s_puts("Max read size is 64 bytes.\r\n");
 
 	__read_fail:
 
-	sys_puts("Invalid arguments.\r\n", 100);
+	s_puts("Invalid arguments.\r\n");
 	sys_exit(-1);
 
 	__read_run:
@@ -252,7 +252,7 @@ int read_main(char* argv[], int argc)
 
 	if(ret == RW_INVALID)
 	{
-		sys_puts("Failed to read.\r\n", 100);
+		s_puts("Failed to read.\r\n");
 		sys_exit(-1);
 	}
 
@@ -262,11 +262,11 @@ int read_main(char* argv[], int argc)
 	for(i = 0; i < ret; i++)
 	{
 		if(' ' <= strbuf[i] && strbuf[i] <= 127)
-			sys_putc(strbuf[i]);
+			s_putc(strbuf[i]);
 		else
-			sys_putc(' ');
+			s_putc(' ');
 	}
-	sys_puts("\r\n", 2);
+	s_puts("\r\n");
 
 	return ret;
 }

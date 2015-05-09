@@ -20,6 +20,13 @@
 #include "../file.h"
 #include <stdint.h>
 
+#define STDIN (0)
+#define STDOUT (1)
+#define STDERR (2)
+
+void s_puts(const char * str);
+void s_putc(char c);
+
 extern inline tid_t sys_get_tid();
 extern inline tpri_t sys_get_pri();
 extern inline void sys_set_pri(tpri_t pri);
