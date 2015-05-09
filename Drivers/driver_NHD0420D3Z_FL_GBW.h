@@ -36,6 +36,9 @@ typedef union
 #define NHD_CONTMASK_BLINKON (0x0020)
 #define NHD_CONTMASK_BLINKOFF (0x0040)
 
+#define NHD_CONTMASK_CONSOLEMODEON (0x0080)
+#define NHD_CONTMASK_CONSOLEMODEOFF (0x0100)
+
 #define NHD_CONTMASK_CLEAR (0x2000)
 // Write the control info to the display
 #define NHD_CONTMASK_WCONT (0x8000)

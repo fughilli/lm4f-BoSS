@@ -12,13 +12,22 @@
 
 #include "../fast_utils.h"
 #include "../debug_serial.h"
+#include "driverlib/sysctl.h"
 
 #define NHD_UART_MODULE (UART7_MODULE)
 
 #define NHD_WIDTH (20)
 #define NHD_HEIGHT (4)
 
+#define NHD_BACKSPACE (8)
+
+uint8_t nhd_buffer[NHD_WIDTH * NHD_HEIGHT];
+
 uint8_t _cx = 0, _cy = 0;
+
+bool consoleMode = false;
+
+void nhd_putc(char c);
 
 void nhd_writepos(uint8_t cx, uint8_t cy)
 {
@@ -34,35 +43,140 @@ void nhd_writepos(uint8_t cx, uint8_t cy)
 	Serial_writebuf(NHD_UART_MODULE, cursorControlBuf, 3);
 }
 
-void nhd_clear()
+void nhd_clear(bool clearbuffer)
 {
 	const uint8_t nhd_clear_buf[] = {0xFE, 0x51};
 	Serial_writebuf(NHD_UART_MODULE, nhd_clear_buf, 2);
 
+	if(clearbuffer)
+		fast_memset(nhd_buffer, ' ', NHD_WIDTH*NHD_HEIGHT);
+
 	_cx = _cy = 0;
+}
+
+void nhd_shiftUp()
+{
+	fast_memmove(nhd_buffer, &nhd_buffer[NHD_WIDTH], NHD_WIDTH*(NHD_HEIGHT-1));
+	fast_memset(&nhd_buffer[NHD_WIDTH*(NHD_HEIGHT-1)], ' ', NHD_WIDTH);
+
+	uint8_t old_cx = _cx;
+
+	nhd_clear(false);
+
+	int i;
+	for(i = 0; i < (NHD_WIDTH*(NHD_HEIGHT-1)); i++)
+	{
+		nhd_putc(nhd_buffer[i]);
+	}
+
+	//SysCtlDelay(1000000);
+
+	nhd_writepos(old_cx, NHD_HEIGHT-1);
+
+	SysCtlDelay(100000);
+}
+
+void nhd_back()
+{
+	if(_cx)
+		_cx--;
+	else
+	{
+		if(_cy)
+		{
+			_cy--;
+		}
+		else
+		{
+			_cy = NHD_HEIGHT-1;
+		}
+		_cx = NHD_WIDTH-1;
+	}
+
+	nhd_writepos(_cx, _cy);
+}
+
+void nhd_putc(char c)
+{
+	bool changedLine = false;
+	int i;
+	switch(c)
+	{
+	case '\n':
+		if (consoleMode)
+		{
+			if (_cy < NHD_HEIGHT - 1)
+			{
+				_cy++;
+				changedLine = true;
+			}
+			else
+				nhd_shiftUp();
+		}
+		else
+		{
+			_cy++;
+			if (_cy == NHD_HEIGHT)
+			{
+				_cy = 0;
+				changedLine = true;
+			}
+		}
+		break;
+	case '\r':
+		_cx = 0;
+		changedLine = true;
+		break;
+	case '\t':
+		while(i < 4)
+		{
+			nhd_putc(' ');
+			i++;
+		}
+		break;
+	case NHD_BACKSPACE:
+		nhd_back();
+		nhd_putc(' ');
+		nhd_back();
+		break;
+	default:
+		nhd_buffer[_cx + (_cy * NHD_WIDTH)] = c;
+		Serial_putc(NHD_UART_MODULE, c);
+		_cx++;
+		if(_cx == NHD_WIDTH)
+		{
+			_cx = 0;
+			if(consoleMode)
+			{
+				if(_cy < NHD_HEIGHT-1)
+					_cy++;
+				else
+					nhd_shiftUp();
+
+			}
+			else
+			{
+				_cy++;
+				if(_cy == NHD_HEIGHT)
+					_cy = 0;
+			}
+
+			changedLine = true;
+		}
+		break;
+	}
+
+
+	if(changedLine)
+		nhd_writepos(_cx, _cy);
 }
 
 int32_t nhd_write(fd_t fd, const uint8_t* buf, int32_t len)
 {
-	int32_t firstlen = len;
-	while(len >= (NHD_WIDTH - _cx))
+	int32_t i;
+	for(i = 0; i < len; i++)
 	{
-		Serial_writebuf(NHD_UART_MODULE, &buf[firstlen - len], (uint32_t)(NHD_WIDTH - _cx));
-
-		len -= (NHD_WIDTH - _cx);
-
-		_cx = 0;
-		_cy++;
-		if(_cy == NHD_HEIGHT)
-			_cy = 0;
-
-		nhd_writepos(_cx, _cy);
-	}
-
-	if (len)
-	{
-		Serial_writebuf(NHD_UART_MODULE, &buf[firstlen - len], (uint32_t) len);
-		_cx += len;
+		nhd_putc(buf[i]);
 	}
 
 	return len;
@@ -86,7 +200,7 @@ uint32_t nhd_ioctl(fd_t fd, uint32_t flags, void* arg)
 	{
 		if (cflags & NHD_CONTMASK_CLEAR)
 		{
-			nhd_clear();
+			nhd_clear(true);
 			ret |= NHD_CONTMASK_CLEAR;
 		}
 
@@ -144,6 +258,18 @@ uint32_t nhd_ioctl(fd_t fd, uint32_t flags, void* arg)
 			Serial_writebuf(NHD_UART_MODULE, cursorControlBuf, 2);
 		}
 		cursorControlBuf[1] = 0;
+
+		// Console Mode
+		if ((cflags & NHD_CONTMASK_CONSOLEMODEON) == NHD_CONTMASK_CONSOLEMODEON)
+		{
+			consoleMode = true;
+			ret |= NHD_CONTMASK_CONSOLEMODEON;
+		}
+		if ((cflags & NHD_CONTMASK_CONSOLEMODEOFF) == NHD_CONTMASK_CONSOLEMODEOFF)
+		{
+			consoleMode = false;
+			ret |= NHD_CONTMASK_CONSOLEMODEOFF;
+		}
 
 		if (ret)
 			ret |= NHD_CONTMASK_WCONT;
