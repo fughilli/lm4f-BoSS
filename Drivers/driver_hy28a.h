@@ -9,6 +9,7 @@
 #define DRIVER_HY28A_H_
 
 #include "../file.h"
+#include <stdint.h>
 
 /*
  * Display modes: graphics/terminal
@@ -34,6 +35,18 @@
 #define HY28A_COL_GREEN (HY28A_CRGB_TO_COL(0,255,0))
 #define HY28A_COL_BLUE (HY28A_CRGB_TO_COL(0,0,255))
 #define HY28A_COL_BLACK (HY28A_CRGB_TO_COL(0,0,0))
+
+#define HY28A_MODE_CHARACTER (0x8000)
+#define HY28A_MODE_GRAPHIC (0x4000)
+#define HY28A_SET_WINDOW (0x2000)
+
+typedef struct
+{
+	uint16_t x;
+	uint16_t y;
+	uint16_t w;
+	uint16_t h;
+} hy28a_window_t;
 
 extern const fd_funmap_t hy28a_funmap;
 
