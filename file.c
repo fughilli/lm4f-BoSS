@@ -88,3 +88,13 @@ uint32_t ioctl(fd_t fd, uint32_t mask, void* arg)
 
 			return IOCTL_INVALID;
 }
+
+int32_t rem(fd_t fd)
+{
+	if (!FD_VALID(fd))
+		return RW_INVALID;
+
+	CALLRET_IF_VALID(file_table[fd].funmap->rem, fd);
+
+	return RW_INVALID;
+}
