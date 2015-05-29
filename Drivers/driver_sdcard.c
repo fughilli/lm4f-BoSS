@@ -210,6 +210,7 @@ fd_t sdcard_open(const char* fname, fmode_t mode, fflags_t flags)
 	FIL tempfil;
 	BYTE modemask = 0;
 
+	/*TODO: insert flags here; should map to fsys flags for DankOS*/
 	if(mode & FMODE_R)
 		modemask |= FA_READ;
 	if(mode & FMODE_W)
@@ -219,17 +220,30 @@ fd_t sdcard_open(const char* fname, fmode_t mode, fflags_t flags)
 	else
 		modemask |= FA_OPEN_EXISTING;
 
-	FRESULT res = f_open(&tempfil, (const TCHAR*)fname, modemask/*TODO: insert flags here; should map to fsys flags for DankOS*/);
-
-	if(res != FR_OK && res != FR_EXIST)
-		return FD_INVALID;
-
 	fd_t fd = sdcard_alloc_fd();
-	sdcard_open_file_t* ofp = sdcard_ofsp_from_fd(fd);
+	if (fd != FD_INVALID)
+	{
+		file_table[fd].sysflags = flags & FFLAG_SYS_MASK;
+		sdcard_open_file_t* ofp = sdcard_ofsp_from_fd(fd);
+		if (ofp)
+		{
+			FRESULT res =
+					f_open(&tempfil,
+							(const TCHAR*) fname,
+							modemask
+							);
 
-	fast_memcpy(&ofp->file, &tempfil, sizeof(FIL));
+			if (res == FR_OK || res == FR_EXIST)
+			{
+				fast_memcpy(&ofp->file, &tempfil, sizeof(FIL));
 
-	return fd;
+				return fd;
+			}
+		}
+	}
+
+	sdcard_free_fd(fd);
+	return FD_INVALID;
 }
 
 bool sdcard_chdir(const char* dirname)
@@ -266,6 +280,19 @@ void sdcard_file_close(fd_t fd)
 	f_close(&ofp->file);
 
 	sdcard_free_fd(fd);
+}
+
+int32_t sdcard_file_rem(fd_t fd)
+{
+	if (!SDCARD_FD_VALID(fd))
+		return REM_INVALID;
+
+	sdcard_open_file_t* ofp = sdcard_ofsp_from_fd(fd);
+
+	if (ofp)
+		return (((int32_t)ofp->file.fsize) - ofp->file.fptr);
+
+	return REM_INVALID;
 }
 
 int32_t sdcard_file_read(fd_t fd, uint8_t* buf, int32_t len)
@@ -336,5 +363,6 @@ const fd_funmap_t sdcard_file_funmap =
 		.ioctl = NULL,
 		.read = sdcard_file_read,
 		.seek = sdcard_file_seek,
-		.write = sdcard_file_write
+		.write = sdcard_file_write,
+		.rem = sdcard_file_rem
 };
