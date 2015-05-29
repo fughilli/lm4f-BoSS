@@ -298,6 +298,34 @@ inline fd_t sys_open(const char* fname, fmode_t mode, fflags_t flags)
 	return ret;
 }
 
+inline fd_t sys_popen(uint32_t bufsiz)
+{
+	fd_t ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) :
+			"r" (SYSCALL_POPEN), "r" (bufsiz) : "memory", "0", "1"
+	);
+	return ret;
+}
+
+inline int32_t sys_rem(fd_t fd)
+{
+	int32_t ret;
+	asm volatile (
+			"mov R0,%1\n\t"
+			"mov R1,%2\n\t"
+			"svc $0x80\n\t"
+			"mov %0,R0"
+			: "=r" (ret) :
+			"r" (SYSCALL_REM), "r" (fd) : "memory", "0", "1"
+	);
+	return ret;
+}
+
 inline bool sys_listdir(char* fnamebuf, size_t fnamebuflen)
 {
 	bool ret;
@@ -392,7 +420,7 @@ inline tid_t sys_spawn2(void (*entry)(void*), void* arg, fd_t stdin, fd_t stdout
 			"svc $0x80\n\t"
 			"mov %0,R0"
 			: "=r" (ret) :
-			"r" (SYSCALL_SPAWN), "r" (entry), "r" (arg), "r" (stdin), "r" (stdout), "r" (stderr) : "memory", "0", "1", "2", "3", "4", "5"
+			"r" (SYSCALL_SPAWN2), "r" (entry), "r" (arg), "r" (stdin), "r" (stdout), "r" (stderr) : "memory", "0", "1", "2", "3", "4", "5"
 	);
 	return ret;
 }

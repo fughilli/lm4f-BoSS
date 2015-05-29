@@ -48,6 +48,8 @@ extern inline int32_t sys_write(fd_t fd, const uint8_t* buf, int32_t len);
 extern inline int32_t sys_seek(fd_t fd, int32_t pos);
 extern inline uint32_t sys_ioctl(fd_t fd, uint32_t mask, void* arg);
 extern inline fd_t sys_open(const char* fname, fmode_t mode, fflags_t flags);
+extern inline fd_t sys_popen(uint32_t bufsiz);
+extern inline int32_t sys_rem(fd_t fd);
 extern inline bool sys_listdir(char* fnamebuf, size_t fnamebuflen);
 extern inline void sys_rwdir();
 extern inline bool sys_chdir(const char* dirname);
