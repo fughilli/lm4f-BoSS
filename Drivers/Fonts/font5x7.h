@@ -16,7 +16,7 @@ extern "C" {
 
 
 
-extern const uint8_t font5x7[];
+extern const uint8_t font5x7[] __attribute__((section("FLASH")));
 
 
 
