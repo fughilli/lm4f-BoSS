@@ -29,7 +29,7 @@ thread_t* tt_entry_for_tid(tid_t id)
 	int i;
 	for(i = 0; i < MAX_THREADS; i++)
 	{
-		if(thread_table[i].id == id)
+		if(thread_table[i].id == id && thread_table[i].state != T_EMPTY)
 		{
 			return &thread_table[i];
 		}
@@ -151,7 +151,7 @@ fd_t thread_get_free_fd(thread_t* thread)
 {
 	int threadfd;
 	// Skip over stdin, stdout, stderr
-	for(threadfd = 2; threadfd < THREAD_MAX_OPEN_FDS; threadfd++)
+	for(threadfd = 3; threadfd < THREAD_MAX_OPEN_FDS; threadfd++)
 	{
 		if(thread->open_fds[threadfd] == FD_INVALID)
 			return threadfd;
@@ -298,4 +298,42 @@ void thread_notify_waiting(thread_t* thread)
 			thread_table[i].state = T_RUNNABLE;
 		}
 	}
+}
+
+// Find all blocked threads waiting on the arg, file, and wake them up
+// Reattempt the read, and pass them the return value
+void thread_notify_waiting_readers(fd_t fd)
+{
+	if(!FD_VALID(fd))
+		return;
+
+		int i;
+
+		for(i = 0; i < MAX_THREADS; i++)
+		{
+			// If the thread is blocked on a file
+			if((thread_table[i].state == T_BLOCKED) &&
+			   (thread_table[i].wait_func == WAITING_ON_FILE))
+			{
+				// Lookup the sysfd of the fd it is waiting on
+				fd_t sysfd = thread_lookup_fd(&thread_table[i], (fd_t) thread_table[i].regs.R1);
+				// Is it waiting on the fd whose readers are being notified?
+				if(sysfd == fd)
+				{
+					// Perform the read again
+					int32_t readsiz = read(
+							sysfd,
+							(uint8_t*) thread_table[i].regs.R2,
+							(int32_t) thread_table[i].regs.R3);
+
+					// If (this time) some bytes were read, copy over the return
+					// value, and set the waiting thread runnable
+					if(readsiz > 0)
+					{
+						thread_table[i].regs.R0 = (uint32_t)readsiz;
+						thread_table[i].state = T_RUNNABLE;
+					}
+				}
+			}
+		}
 }

@@ -18,7 +18,7 @@
 
 #define MAX_THREADS (12)
 //#define THREAD_MEM_SIZE (512)
-#define LOG2_THREAD_MEM_SIZE (9)
+#define LOG2_THREAD_MEM_SIZE (10)
 #define THREAD_MEM_SIZE (1<<LOG2_THREAD_MEM_SIZE)
 
 #define THREAD_MAX_OPEN_FDS (8)
@@ -67,6 +67,7 @@ typedef struct
 typedef bool(*twait_func_t)(void);
 
 #define WAITING_ON_THREAD ((twait_func_t)(-1))
+#define WAITING_ON_FILE ((twait_func_t)(-2))
 
 typedef struct
 {
@@ -92,9 +93,9 @@ typedef struct
 	// manipulate files should reference this array
 	// to figure out which system fd to modify;
 	// (e.g., a call to sys_write(3, ...) should
-	// look up the system fd from open_fds[0], and
+	// look up the system fd from open_fds[3], and
 	// a call to sys_write(1, ...) should write to
-	// stdout)
+	// stdout, a.k.a., open_fds[1])
 	//
 	// These should be sys_close'd at the program exit,
 	// except for 0,1,2 which are stdin, stdout, and
@@ -122,5 +123,6 @@ fd_t thread_get_free_fd(thread_t* thread);
 fd_t thread_alloc_fd(thread_t* thread, fd_t sysfd);
 fd_t thread_free_fd(thread_t* thread, fd_t threadfd);
 fd_t thread_lookup_fd(thread_t* thread, fd_t threadfd);
+void thread_notify_waiting_readers(fd_t fd);
 
 #endif /* THREAD_H_ */
