@@ -60,6 +60,14 @@ need to determine how to handle immediate wait on a spawned/forked child:
 	can try adding critical-section system call pair (entry - exit) that will lock out
 	threads of lower/same privilege
 	
+need to implement some kind of kernel_checkptr(thread_t*, void*) which will determine 
+	whether or not a pointer belongs to a certain thread's memory; this check should
+	be performed on all pointers passed to the kernel in system calls
+	
+need to keep track of readers/writers on a file (keep a count); closing a file should notify
+	blocked readers (and blocked writers, when that gets implemented), reading a file should
+	not block if there are no writers
+	
 	
 Functions to implement for filesystems:
 void <fsysimpl>unmount(fsys_t fsys)
