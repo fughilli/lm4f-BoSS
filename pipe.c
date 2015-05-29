@@ -14,7 +14,8 @@ const fd_funmap_t pipe_funmap =
 		.read = pipe_read,
 		.write = pipe_write,
 		.seek = NULL,
-		.ioctl = NULL
+		.ioctl = NULL,
+		.rem = pipe_rem
 };
 
 fd_t ATOMIC pipe_create(size_t bufsiz)
@@ -51,7 +52,7 @@ fd_t ATOMIC pipe_create(size_t bufsiz)
 	ps->lock = 0;
 
 	// Set up the file_table entry
-	file_table[pfd].fdata = (void*)&ps;
+	file_table[pfd].fdata = (void*)ps;
 	file_table[pfd].funmap = &pipe_funmap;
 
 	return pfd;
@@ -87,6 +88,24 @@ int32_t pipe_read(fd_t fd, uint8_t* buf, int32_t len)
 	//TODO: pipe_read--> sys_unlock(&ps->lock);
 
 	return oidx;
+}
+
+int32_t pipe_rem(fd_t fd)
+{
+	if(!FD_VALID_PIPE(fd))
+		return REM_INVALID;
+
+	pipe_t* ps = (pipe_t*)file_table[fd].fdata;
+	//TODO: pipe_rem--> while(!sys_lock(&ps->lock));
+
+	if(ps->tail >= ps->head)
+		return (int32_t)(ps->tail - ps->head);
+	else
+		return (int32_t)((ps->tail + ps->bufsiz) - ps->head);
+
+	//TODO: pipe_rem--> sys_unlock(&ps->lock);
+
+	return REM_INVALID;
 }
 
 int32_t pipe_write(fd_t fd, const uint8_t* buf, int32_t len)

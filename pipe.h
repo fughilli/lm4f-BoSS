@@ -32,5 +32,6 @@ void pipe_close(fd_t fd);
 int32_t pipe_read(fd_t fd, uint8_t* buf, int32_t len);
 int32_t pipe_write(fd_t fd, const uint8_t* buf, int32_t len);
 int32_t pipe_transfer(fd_t destfd, fd_t srcfd, int32_t len);
+int32_t pipe_rem(fd_t fd);
 
 #endif /* PIPE_H_ */
