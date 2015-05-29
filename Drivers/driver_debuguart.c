@@ -22,9 +22,11 @@ void debuguart_close(fd_t fd)
 int32_t debuguart_read(fd_t fd, uint8_t* buf, int32_t len)
 {
 	int32_t i = 0;
-	while(i < len && Serial_avail(UART_DEBUG_MODULE))
+	while(i < len)// && Serial_avail(UART_DEBUG_MODULE))
 	{
 		buf[i] = Serial_getc(UART_DEBUG_MODULE);
+		if(buf[i] == ((uint8_t)-1))
+			continue;
 		i++;
 	}
 	return i;
