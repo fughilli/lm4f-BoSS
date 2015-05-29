@@ -21,5 +21,8 @@ int cat_main(char* argv[], int argc);
 int rm_main(char* argv[], int argc);
 int touch_main(char* argv[], int argc);
 int mkdir_main(char* argv[], int argc);
+int cp_main(char* argv[], int argc);
+int mv_main(char* argv[], int argc);
+int wc_main(char* argv[], int argc);
 
 #endif /* FILEIO_H_ */

@@ -7,76 +7,133 @@
 
 #include "fileio.h"
 
-int write_main(char* argv[], int argc)
+int cp_main(char* argv[], int argc)
 {
-	fd_t fd;
+	fd_t srcfd, destfd;
+	uint8_t copybuf[64];
 	if(argc == 3)
 	{
-		bool succ;
-		fd = (fd_t)fast_sntoul(argv[1], fast_strlen(argv[1]), 10, &succ);
-		if(succ)
+		if(((srcfd = sys_open(argv[1], FMODE_R, FFLAG_NOBLOCK)) != FD_INVALID) &&
+			((destfd = sys_open(argv[2], FMODE_W, FFLAG_CREAT)) != FD_INVALID))
 		{
-			goto __write_run;
+			int32_t copysiz;
+
+			while((copysiz = sys_read(srcfd, copybuf, 64)) > 0)
+			{
+				int32_t copybufindex = 0;
+				do
+				{
+					copybufindex += sys_write(
+							destfd,
+							copybuf + copybufindex,
+							copysiz - copybufindex);
+				} while (copybufindex < copysiz);
+			}
 		}
 	}
 
-	sys_puts("Invalid arguments.\r\n", 100);
-	sys_exit(-1);
-
-	__write_run:
-
-	return sys_write(fd, (uint8_t*)argv[2], fast_strlen(argv[2]));
-}
-
-int open_main(char* argv[], int argc)
-{
-	char printbuf[32];
-	fflags_t flags;
-	fmode_t mode;
-	if(argc == 4)
-	{
-		bool succ;
-		mode = (fmode_t)fast_sntoul(argv[2], fast_strlen(argv[2]), 16, &succ);
-		if (!succ)
-		{
-			goto __open_fail;
-		}
-		flags = (fflags_t)fast_sntoul(argv[3], fast_strlen(argv[3]), 16, &succ);
-		if (!succ)
-		{
-			goto __open_fail;
-		}
-	}
-
-	fd_t resfd = sys_open(argv[1], mode, flags);
-	fast_snprintf(printbuf, 32, "fd: %d\r\n", (int)resfd);
-	sys_puts(printbuf, 32);
-	return 0;
-
-	__open_fail:
-	sys_puts("Invalid arguments.\r\n", 100);
 	return -1;
 }
 
-int close_main(char* argv[], int argc)
+int wc_main(char* argv[], int argc)
 {
-	fd_t argfd;
-	if(argc == 2)
+	fd_t srcfd;
+
+	uint32_t charcnt = 0, wordcnt = 0, linecnt = 0;
+	bool countchars = false, countwords = false, countlines = false;
+	bool countselective = false;
+	uint8_t readbuf[64];
+
+	process_flags:
+	argv++;
+	argc--;
+	if(!argc)
+		return -1;
+	if(fast_strcmp(argv[0], '-c') == 0)
 	{
-		bool succ;
-		argfd = (fd_t)fast_sntoul(argv[1], fast_strlen(argv[1]), 10, &succ);
-		if (!succ)
-		{
-			goto __close_fail;
-		}
+			countchars = true;
+			countselective = true;
+			goto process_flags;
+	}
+	else if(fast_strcmp(argv[0], '-w') == 0)
+	{
+			countchars = true;
+			countselective = true;
+			goto process_flags;
+	}
+	else if(fast_strcmp(argv[0], '-l') == 0)
+	{
+			countchars = true;
+			countselective = true;
+			goto process_flags;
 	}
 
-	sys_close(argfd);
-	sys_puts("Closed file.\r\n", 32);
-	return 0;
+	int32_t readsiz;
 
-	__close_fail:
-	sys_puts("Invalid arguments.\r\n", 100);
+//	while (sys_rem(STDIN) && ((readsiz = sys_read(STDIN, readbuf, 64)) > 0))
+//	{
+//		charcnt += readsiz;
+//		while (readsiz--)
+//		{
+//			if (readbuf[readsiz] == ' ')
+//				wordcnt++;
+//			if (readbuf[readsiz] == '\n')
+//				linecnt++;
+//		}
+//	}
+
+	while (argc)
+	{
+		if ((srcfd = sys_open(argv[0], FMODE_R, FFLAG_NOBLOCK)) != FD_INVALID)
+		{
+			int32_t readsiz;
+
+			while ((readsiz = sys_read(srcfd, readbuf, 64)) > 0)
+			{
+				charcnt += readsiz;
+				while (readsiz--)
+				{
+					if (readbuf[readsiz] == ' ')
+						wordcnt++;
+					if (readbuf[readsiz] == '\n')
+						linecnt++;
+				}
+			}
+
+			sys_close(srcfd);
+		}
+
+		argv++;
+		argc--;
+	}
+
+	if(!countselective)
+	{
+		countchars = countwords = countlines = true;
+	}
+	char* printbuf = (char*) readbuf;
+	if (countchars)
+	{
+		fast_snprintf(printbuf, 64, "c: %ud ", charcnt);
+		s_puts(printbuf);
+	}
+	if (countwords)
+	{
+		fast_snprintf(printbuf, 64, "w: %ud ", wordcnt);
+		s_puts(printbuf);
+	}
+	if (countlines)
+	{
+		fast_snprintf(printbuf, 64, "l: %ud ", linecnt);
+		s_puts(printbuf);
+	}
+	s_puts("\r\n");
+
+	return -1;
+}
+
+int mv_main(char* argv[], int argc)
+{
 	return -1;
 }
 
@@ -84,27 +141,52 @@ int cat_main(char* argv[], int argc)
 {
 	char printbuf[64];
 	int32_t readsiz;
-	if (argc == 2)
+	if (argc >= 2)
 	{
-		fd_t fd;
-		if ((fd = sys_open(argv[1], FMODE_R, 0)) == FD_INVALID)
+		uint32_t findex = 1;
+		while(findex < argc)
 		{
-			s_puts("Failed to open \'");
-			s_puts(argv[1]);
-			s_puts("\'\r\n");
-			return -1;
+			if (fast_strcmp(argv[findex], "-") == 0)
+			{
+				// TODO: Reader should be awoken by closing of pipe
+				while (sys_rem(STDIN) && ((readsiz = sys_read(STDIN, (uint8_t*) printbuf, 64))
+								!= RW_INVALID))
+				{
+					if (readsiz == 0)
+						break;
+
+					sys_write(STDOUT, (uint8_t*) printbuf, readsiz);
+				}
+			}
+			else
+			{
+				fd_t fd;
+				if ((fd = sys_open(argv[findex], FMODE_R, 0)) == FD_INVALID)
+				{
+					s_puts("Failed to open \'");
+					s_puts(argv[findex]);
+					s_puts("\'\r\n");
+					return -1;
+				}
+
+				// TODO: This read shouldn't block if there are no writers; because
+				// reader/writer tracking hasn't been implemented yet, this has
+				// to check for the remaining characters in the file
+				while (sys_rem(fd)
+						&& ((readsiz = sys_read(fd, (uint8_t*) printbuf, 64))
+								!= RW_INVALID))
+				{
+					if (readsiz == 0)
+						break;
+
+					sys_write(STDOUT, (uint8_t*) printbuf, readsiz);
+				}
+
+				sys_close(fd);
+			}
+
+			findex++;
 		}
-
-
-		while((readsiz = sys_read(fd, (uint8_t*)printbuf, 64)) != RW_INVALID)
-		{
-			if(readsiz == 0)
-				break;
-
-			sys_write(STDOUT, printbuf, readsiz);
-		}
-
-		sys_close(fd);
 		return 0;
 	}
 
