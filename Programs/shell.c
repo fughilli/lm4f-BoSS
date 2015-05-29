@@ -7,7 +7,6 @@
 
 #include "shell.h"
 #include <stdint.h>
-#include "../debug_serial.h"
 #include "cmdline_parse/cmdline_parse.h"
 #include "../pipe.h"
 
@@ -118,6 +117,13 @@ shell_func_t shell_getProg(const char* name)
 	return NULL;
 }
 
+uint8_t shell_readChar()
+{
+	uint8_t ret;
+	sys_read(STDIN,&ret,1);
+	return ret;
+}
+
 void shell_main(void* arg)
 {
 	fd_t labelfd = sys_open("/settings/shell/label.txt", FMODE_R, 0);
@@ -143,12 +149,13 @@ void shell_main(void* arg)
 
 		while (1)
 		{
-			while (!Serial_avail(UART_DEBUG_MODULE))
+			while (!sys_rem(STDIN))
 			{
 				sys_sleep(10);
 			}
 
-			char nextChar = Serial_getc(UART_DEBUG_MODULE);
+			char nextChar;
+			sys_read(STDIN,&nextChar,1);
 
 			// Handle newline (end-of-command)
 			if (nextChar == '\r')
@@ -224,10 +231,10 @@ void shell_main(void* arg)
 			{
 				if (nextChar == SHELL_ESC_CHAR)
 				{
-					if (Serial_getc(UART_DEBUG_MODULE) == '[')
+					if (shell_readChar() == '[')
 					{
 						char control_char;
-						switch (control_char = Serial_getc(UART_DEBUG_MODULE))
+						switch (control_char = shell_readChar())
 						{
 //            			case 'A':
 //            				continue;
@@ -236,13 +243,13 @@ void shell_main(void* arg)
 //            				continue;
 //            				break;
 						case '4':
-							Serial_getc(UART_DEBUG_MODULE); // Consume '~'
+							shell_readChar(); // Consume '~'
 							shell_lineBufferInsertIndex = shell_lineBufferIndex;
 							s_puts("\x1B[4~");
 							continue;
 							break;
 						case '1':
-							Serial_getc(UART_DEBUG_MODULE); // Consume '~'
+							shell_readChar(); // Consume '~'
 							shell_lineBufferInsertIndex = 0;
 							s_puts("\x1B[1~");
 							continue;
