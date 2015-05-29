@@ -54,6 +54,15 @@ typedef struct
 	uint8_t (*map)(uint8_t);
 } Font_t;
 
+typedef struct
+{
+    uint16_t y1;
+    uint16_t y2;
+    uint16_t off;
+} pimg_t;
+
+pimg_t pimg1, pimg2, *pimgp1, *pimgp2;
+
 static uint16_t
 hy28a_buf_w, hy28a_buf_h,
 hy28a_pix_w, hy28a_pix_h;
@@ -127,6 +136,12 @@ typedef enum
 
 hy28a_disp_orient_t hy28a_orient;
 
+typedef enum
+{
+	PARTIAL_DISPLAY_1 = 0,
+	PARTIAL_DISPLAY_2 = 1
+} pdisp_num_t;
+
 //static uint16_t _gcx = 0, _gcy = 0;
 
 void hy28a_putc(char c);
@@ -135,6 +150,26 @@ void hy28a_fast_fill(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_
 void hy28a_clear(bool clearbuffer)
 {
 	hy28a_fast_fill(0, 0, hy28a_pix_w - 1, hy28a_pix_h - 1, 0x0000);
+
+	pimg1.y1 = 0;
+	pimg1.y2 = hy28a_font.vstride;
+	pimg1.off = 0;
+
+	pimg2.y1 = 0;
+	pimg2.y2 = hy28a_buf_h*hy28a_font.vstride;
+	pimg2.off = 0;
+
+	pimgp1 = &pimg1;
+	pimgp2 = &pimg2;
+
+	hy28a_set_partial_display(PARTIAL_DISPLAY_1,
+			pimg1.y1,
+			pimg1.y2,
+			pimg1.off);
+	hy28a_set_partial_display(PARTIAL_DISPLAY_2,
+			pimg2.y1,
+			pimg2.y2,
+			pimg2.off);
 
 	if(clearbuffer)
 		fast_memset((void*)hy28a_buffer, 0, hy28a_buf_w*hy28a_buf_h);
@@ -268,6 +303,15 @@ static void hy28a_set_window(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
 	hy28a_write_command(0x22);
 }
 
+void hy28a_set_partial_display(pdisp_num_t pdn, uint16_t y1, uint16_t y2, uint16_t yoff)
+{
+	uint8_t register_offset = 3 * pdn;
+
+	hy28a_write_register(0x80 + register_offset, yoff);
+	hy28a_write_register(0x81 + register_offset, y1);
+	hy28a_write_register(0x82 + register_offset, y2);
+}
+
 void hy28a_fast_fill(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color)
 {
     hy28a_set_window(x1, y1, x2, y2);
@@ -375,7 +419,8 @@ void hy28a_init()
 	hy28a_write_register(0x95, 0x0110); // Frame Cycle Contral
 	hy28a_write_register(0x97, (0 << 8));
 	hy28a_write_register(0x98, 0x0000); // Frame Cycle Contral
-	hy28a_write_register(0x07, 0x0133);
+	//hy28a_write_register(0x07, 0x0133);
+	hy28a_write_register(0x07, 0x3033);
 	SysCtlDelay(SysCtlClockGet() / 10 / 3);
 
 	hy28a_pix_w = 240;
@@ -390,7 +435,7 @@ void hy28a_init()
 
 	hy28a_load_font(&hy28a_font_9x15);
 
-	hy28a_set_orientation(LANDSCAPE_INV);
+	hy28a_set_orientation(PORTRAIT);
 
 	hy28a_clear(true);
 
@@ -399,21 +444,92 @@ void hy28a_init()
 
 void hy28a_shiftUp()
 {
-	fast_memmove((void*)hy28a_buffer, (void*)&hy28a_buffer[hy28a_buf_w], hy28a_buf_w*(hy28a_buf_h-1));
-	fast_memset((void*)&hy28a_buffer[hy28a_buf_w*(hy28a_buf_h-1)], 0, hy28a_buf_w);
+	//fast_memmove((void*)hy28a_buffer, (void*)&hy28a_buffer[hy28a_buf_w], hy28a_buf_w*(hy28a_buf_h-1));
+	//fast_memset((void*)&hy28a_buffer[hy28a_buf_w*(hy28a_buf_h-1)], 0, hy28a_buf_w);
 
-	uint8_t old_cx = _cx;
-
-	hy28a_clear(false);
-
-	int i;
-	for(i = 0; i < (hy28a_buf_w*(hy28a_buf_h-1)); i++)
+	if(pimgp1->y2 < hy28a_buf_h*hy28a_font.vstride)
 	{
-		hy28a_putc(hy28a_buffer[i]);
+		pimgp1->y2 += hy28a_font.vstride;
+
+		pimgp2->y1 += hy28a_font.vstride;
+		pimgp2->off += hy28a_font.vstride;
+
+		if (pimgp1->y2 == hy28a_buf_h * hy28a_font.vstride)
+		{
+			pimgp2->y1 = 0;
+			pimgp2->y2 = 0;
+			pimgp2->off = hy28a_buf_h * hy28a_font.vstride;
+		}
+	}
+	else
+	{
+		if (pimgp1->y1 < hy28a_buf_h * hy28a_font.vstride)
+		{
+			pimgp1->y1 += hy28a_font.vstride;
+			pimgp2->off -= hy28a_font.vstride;
+			pimgp2->y2 += hy28a_font.vstride;
+
+			if (pimgp1->y1 == hy28a_buf_h * hy28a_font.vstride)
+			{
+				pimgp1->off = hy28a_buf_h * hy28a_font.vstride;
+				pimgp1->y1 = 0;
+				pimgp1->y2 = 0;
+
+				pimg_t* temp = pimgp1;
+				pimgp1 = pimgp2;
+				pimgp2 = temp;
+			}
+		}
 	}
 
-	_cx = old_cx;
-	_cy = hy28a_buf_h-1;
+	hy28a_set_partial_display(PARTIAL_DISPLAY_1,
+			pimg1.y1,
+			pimg1.y2,
+			pimg1.off);
+	hy28a_set_partial_display(PARTIAL_DISPLAY_2,
+			pimg2.y1,
+			pimg2.y2,
+			pimg2.off);
+
+	_cy++;
+	if(_cy == hy28a_buf_h)
+	{
+		_cy = 0;
+	}
+
+	int desty = _cy * hy28a_font.vstride;
+
+	hy28a_set_window(0, desty, hy28a_pix_w, desty + hy28a_font.vstride);
+
+	CS_LOW();
+
+	_writeSPI(SPI_START | SPI_WR | SPI_DATA);
+
+	int i, j;
+
+	for (i = 0; i < hy28a_font.vstride; i++)
+	{
+		for (j = 0; j < hy28a_pix_w; j++)
+		{
+			_writeSPI(HY28A_COL_BLACK >> 8);
+			_writeSPI(HY28A_COL_BLACK & 0xFF);
+		}
+	}
+
+	CS_HIGH();
+
+//	uint8_t old_cx = _cx;
+//
+//	hy28a_clear(false);
+//
+//	int i;
+//	for(i = 0; i < (hy28a_buf_w*(hy28a_buf_h-1)); i++)
+//	{
+//		hy28a_putc(hy28a_buffer[i]);
+//	}
+//
+//	_cx = old_cx;
+//	_cy = hy28a_buf_h-1;
 }
 
 void hy28a_back()
@@ -493,23 +609,24 @@ void hy28a_putc(char c)
 	switch(c)
 	{
 	case '\n':
-		if (consoleMode)
-		{
-			if (_cy < hy28a_buf_h - 1)
-			{
-				_cy++;
-			}
-			else
-				hy28a_shiftUp();
-		}
-		else
-		{
-			_cy++;
-			if (_cy == hy28a_buf_h)
-			{
-				_cy = 0;
-			}
-		}
+//		if (consoleMode)
+//		{
+//			if (_cy < hy28a_buf_h - 1)
+//			{
+//				_cy++;
+//			}
+//			else
+//				hy28a_shiftUp();
+//		}
+//		else
+//		{
+//			_cy++;
+//			if (_cy == hy28a_buf_h)
+//			{
+//				_cy = 0;
+//			}
+//		}
+		hy28a_shiftUp();
 		break;
 	case '\r':
 		_cx = 0;
@@ -537,20 +654,21 @@ void hy28a_putc(char c)
 		if(_cx == hy28a_buf_w)
 		{
 			_cx = 0;
-			if(consoleMode)
-			{
-				if(_cy < hy28a_buf_h-1)
-					_cy++;
-				else
-					hy28a_shiftUp();
-
-			}
-			else
-			{
-				_cy++;
-				if(_cy == hy28a_buf_h)
-					_cy = 0;
-			}
+//			if(consoleMode)
+//			{
+//				if(_cy < hy28a_buf_h-1)
+//					_cy++;
+//				else
+//					hy28a_shiftUp();
+//
+//			}
+//			else
+//			{
+//				_cy++;
+//				if(_cy == hy28a_buf_h)
+//					_cy = 0;
+//			}
+			hy28a_shiftUp();
 		}
 		break;
 	}
