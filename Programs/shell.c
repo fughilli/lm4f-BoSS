@@ -8,11 +8,13 @@
 #include "shell.h"
 #include <stdint.h>
 #include "../debug_serial.h"
+#include "cmdline_parse/cmdline_parse.h"
+#include "../pipe.h"
 
 const uint8_t _bsp_seq[] =
 { SHELL_BACKSPACE, ' ', SHELL_BACKSPACE };
 
-#define _SHELL_PROMPT_LABEL_ "DankOS"
+#define SHELL_DEFAULT_PROMPT "BalkOS"
 
 #define SHELL_IFS (' ')
 #define SHELL_ESC_CHAR ('\x1B')
@@ -29,6 +31,8 @@ char* shell_argBuffer[SHELL_MAX_ARGS];
 uint32_t shell_lineIndex, shell_argIndex;
 int lastret;
 
+char shell_labelBuf[16];
+
 char shell_varBuf[16];
 
 const char shell_error_too_many_args[] = "Parse error: too many arguments!";
@@ -43,14 +47,14 @@ shell_progMapEntry_t shell_progMap[SHELL_MAX_PROGRAMS];
 
 int shell_help_main(char* argv[], int argc)
 {
-	Serial_puts(UART_DEBUG_MODULE, "The following programs are available:\r\n", 100);
+	s_puts("The following programs are available:\r\n");
 	int i;
 	for(i = 0; i < SHELL_MAX_PROGRAMS; i++)
 	{
 		if(fast_strlen(shell_progMap[i].name))
 		{
-			Serial_puts(UART_DEBUG_MODULE, shell_progMap[i].name, 100);
-			Serial_puts(UART_DEBUG_MODULE, "\r\n", 2);
+			s_puts(shell_progMap[i].name);
+			s_puts("\r\n");
 		}
 	}
 	return 0;
@@ -116,9 +120,24 @@ shell_func_t shell_getProg(const char* name)
 
 void shell_main(void* arg)
 {
+	fd_t labelfd = sys_open("/settings/shell/label.txt", FMODE_R, 0);
+	if (labelfd == FD_INVALID)
+	{
+		fast_strcpy(shell_labelBuf, SHELL_DEFAULT_PROMPT);
+	}
+	else
+	{
+		int labellen = sys_read(labelfd, (uint8_t*)shell_labelBuf, 16);
+		labellen = (labellen > 15) ? 15 : labellen;
+		shell_labelBuf[labellen] = '\0';
+
+		sys_close(labelfd);
+	}
+
 	while (1)
 	{
-		Serial_puts(UART_DEBUG_MODULE, _SHELL_PROMPT_LABEL_ ":>", 100);
+		s_puts(shell_labelBuf);
+		s_puts(":>");
 		shell_lineBufferIndex = 0;
 		shell_lineBufferInsertIndex = 0;
 
@@ -138,15 +157,47 @@ void shell_main(void* arg)
 				{
 					shell_lineBuffer[shell_lineBufferIndex++] = 0;
 
-					Serial_puts(UART_DEBUG_MODULE, "\r\n", 2);
+					s_puts("\r\n");
 
 					shell_processLine();
 					break;
 				}
 				else
 				{
-					Serial_puts(UART_DEBUG_MODULE, "\r\n", 2);
+					s_puts("\r\n");
 					break;
+				}
+			}
+			else if (nextChar == '\t')
+			{
+				// Autocomplete:
+				int i;
+				for(i = 0; i < SHELL_MAX_PROGRAMS; i++)
+				{
+					int namelen = fast_strlen(shell_progMap[i].name);
+					// If the program is valid
+					if(namelen)
+					{
+						// If the current line contents are less or equal to the name length
+						if(shell_lineBufferIndex <= namelen)
+						{
+							if(fast_memcmp(shell_lineBuffer, shell_progMap[i].name, shell_lineBufferIndex) == 0)
+							{
+								// They didn't mean this one
+								if(shell_lineBufferIndex == namelen)
+								{
+									continue;
+								}
+
+								fast_memcpy(shell_lineBuffer, shell_progMap[i].name, namelen);
+
+								while(shell_lineBufferIndex--)
+									s_putc(SHELL_BACKSPACE);
+								sys_write(STDOUT, (uint8_t*)shell_lineBuffer, namelen);
+								shell_lineBufferIndex = shell_lineBufferInsertIndex = namelen;
+							}
+						}
+					}
 				}
 			}
 			else if (nextChar == SHELL_BACKSPACE)
@@ -160,11 +211,11 @@ void shell_main(void* arg)
 									- shell_lineBufferInsertIndex);
 					shell_lineBufferInsertIndex--;
 					shell_lineBufferIndex--;
-					Serial_writebuf(UART_DEBUG_MODULE, _bsp_seq, 3);
+					sys_write(STDOUT, _bsp_seq, 3);
 				}
 				else
 				{
-					Serial_putc(UART_DEBUG_MODULE, SHELL_BELL_CHAR);
+					s_putc(SHELL_BELL_CHAR);
 				}
 				continue;
 			}
@@ -187,24 +238,24 @@ void shell_main(void* arg)
 						case '4':
 							Serial_getc(UART_DEBUG_MODULE); // Consume '~'
 							shell_lineBufferInsertIndex = shell_lineBufferIndex;
-							Serial_writebuf(UART_DEBUG_MODULE, "\x1B[4~", 4);
+							s_puts("\x1B[4~");
 							continue;
 							break;
 						case '1':
 							Serial_getc(UART_DEBUG_MODULE); // Consume '~'
 							shell_lineBufferInsertIndex = 0;
-							Serial_writebuf(UART_DEBUG_MODULE, "\x1B[1~", 4);
+							s_puts("\x1B[1~");
 							continue;
 							break;
 						case 'D':
 							if (shell_lineBufferInsertIndex > 0)
 							{
 								shell_lineBufferInsertIndex--;
-								Serial_writebuf(UART_DEBUG_MODULE, SHELL_LARROW_SEQ, 3);
+								s_puts(SHELL_LARROW_SEQ);
 							}
 							else
 							{
-								Serial_putc(UART_DEBUG_MODULE, SHELL_BELL_CHAR);
+								s_putc(SHELL_BELL_CHAR);
 							}
 							continue;
 							break;
@@ -213,11 +264,11 @@ void shell_main(void* arg)
 									< shell_lineBufferIndex)
 							{
 								shell_lineBufferInsertIndex++;
-								Serial_writebuf(UART_DEBUG_MODULE, SHELL_RARROW_SEQ, 3);
+								s_puts(SHELL_RARROW_SEQ);
 							}
 							else
 							{
-								Serial_putc(UART_DEBUG_MODULE, SHELL_BELL_CHAR);
+								s_putc(SHELL_BELL_CHAR);
 							}
 							continue;
 							break;
@@ -250,12 +301,13 @@ void shell_main(void* arg)
 			// Handle line buffer overrun
 			if (shell_lineBufferIndex == SHELL_LINE_BUFFER_SIZE)
 			{
-				Serial_putc(UART_DEBUG_MODULE, SHELL_BELL_CHAR);
+				s_putc(SHELL_BELL_CHAR);
 				shell_lineBufferIndex--;
+				shell_lineBufferInsertIndex--;
 				continue;
 			}
 
-			Serial_putc(UART_DEBUG_MODULE, nextChar);
+			s_putc(nextChar);
 		}
 	}
 }
@@ -274,7 +326,9 @@ void shell_run_shim(void* arg)
 	shell_run_shim_params_t* shimparams = ((shell_run_shim_params_t*) arg);
 	int ret = shimparams->func(shimparams->argv, shimparams->argc);
 
-	sys_unlock(&shim_print_lock);
+	fast_free(shimparams);
+
+	//sys_unlock(&shim_print_lock);
 
 	sys_exit(ret);
 }
@@ -330,9 +384,9 @@ void shell_job_waiter(void* arg)
 
 	char printbuf[32];
 	fast_snprintf(printbuf, 32, "[%d] done %d\t\t\'", (int)(job - shell_jobs), retval);
-	sys_puts(printbuf, 32);
-	sys_puts(job->program, 100);
-	sys_puts("\'\r\n", 3);
+	s_puts(printbuf);
+	s_puts(job->program);
+	s_puts("\'\r\n");
 
 	shell_freeJob(job);
 	sys_exit(0);
@@ -346,10 +400,10 @@ int shell_jobs_main(char* argv[], int argc)
 	{
 		if(shell_jobs[i].program)
 		{
-			fast_snprintf(printbuf, 32, "[%d] running\t\t\'", i);
-			sys_puts(printbuf, 32);
-			sys_puts(shell_jobs[i].program, 100);
-			sys_puts("\'\r\n", 3);
+			fast_snprintf(printbuf, 32, "[%d] %d running\t'", i, (int)shell_jobs[i].thread);
+			s_puts(printbuf);
+			s_puts(shell_jobs[i].program);
+			s_puts("\'\r\n");
 		}
 	}
 
@@ -369,104 +423,174 @@ void shell_substitute_vars()
 	}
 }
 
-void shell_processLine(void)
+tid_t process_command(ptnode_t* node, fd_t stdin, fd_t stdout, fd_t stderr)
 {
-	// Initial term is at start of line
-	char* shell_startOfTerm = shell_lineBuffer;
-
-	char quoteChar = 0;
-
-	bool background = false;
-
-	// Find end of term (delimited on IFS)
-	shell_argIndex = 0;
-	for (shell_lineIndex = 0; shell_lineIndex < shell_lineBufferIndex;
-			shell_lineIndex++)
+	int progidx = shell_getProgIdx(node->tlist[0]);
+	if (progidx >= 0)
 	{
-		char nextChar = shell_lineBuffer[shell_lineIndex];
+		shell_run_shim_params_t* shim_params = (shell_run_shim_params_t*)fast_alloc(sizeof(shell_run_shim_params_t));
+		shim_params->func = shell_progMap[progidx].prog_main;
+		shim_params->argc = node->tlsiz;
+		shim_params->argv = node->tlist;
 
-		if (quoteChar)
-		{
-			bool breakOnQuote = false;
-			for (; shell_lineIndex < shell_lineBufferIndex; shell_lineIndex++)
-			{
-				nextChar = shell_lineBuffer[shell_lineIndex];
-				if (nextChar == quoteChar)
-				{
-					breakOnQuote = true;
-					break;
-				}
-			}
+		//shell_substitute_vars();
 
-			if (!breakOnQuote)
-			{
-				Serial_puts(UART_DEBUG_MODULE, shell_error_mismatched_quotes,
-						100);
-				return;
-			}
-		}
 
-		switch (nextChar)
-		{
-		case '\'':
-		case '\"':
-			if (!quoteChar)
-			{
-				quoteChar = nextChar;
-				shell_startOfTerm = &shell_lineBuffer[shell_lineIndex + 1];
-				break;
-			}
-			else if (nextChar == quoteChar)
-			{
-				quoteChar = 0;
-				shell_lineBuffer[shell_lineIndex] = 0;
-				break;
-			}
-		case SHELL_IFS:
-		case 0:
-			// If the maximum argument count has been reached
-			if (shell_argIndex == SHELL_MAX_ARGS)
-			{
-				Serial_puts(UART_DEBUG_MODULE, shell_error_too_many_args, 100);
-				return;
-			}
 
-			// Swap the space character with a null byte
-			shell_lineBuffer[shell_lineIndex] = 0;
-			// Add the just-completed term to the argument list
-			shell_argBuffer[shell_argIndex++] = shell_startOfTerm;
-			// Start the next term after the null byte
-			while (shell_lineBuffer[shell_lineIndex + 1] == SHELL_IFS
-					&& shell_lineIndex != shell_lineBufferIndex)
-				shell_lineIndex++;
-			shell_startOfTerm = &shell_lineBuffer[shell_lineIndex + 1];
-			break;
-		}
-	}
-
-	shell_run_shim_params_t shim_params;
-	int progidx = shell_getProgIdx(shell_argBuffer[0]);
-	if (progidx > 0)
-	{
-		if(fast_strcmp(shell_argBuffer[shell_argIndex - 1], "&") == 0)
-		{
-			background = true;
-			shell_argIndex--;
-		}
-
-		shim_params.func = shell_progMap[progidx].prog_main;
-		shim_params.argc = shell_argIndex;
-		shim_params.argv = shell_argBuffer;
-
-		shell_substitute_vars();
-
-		tid_t tid = sys_spawn(shell_run_shim, &shim_params);
+		tid_t tid = sys_spawn2(shell_run_shim, shim_params, stdin, stdout, stderr);
 
 		//TODO: Fix max jobs problem; handle job == NULL properly
+		return tid;
 
-		if(!background)
+	}
+	else
+	{
+		s_puts(shell_error_unknown_command);
+		s_puts(shell_argBuffer[0]);
+		s_puts("\'\r\n");
+		return 0;
+	}
+}
+
+fd_t tempfds[16];
+uint8_t tempfdidx = 0;
+
+tid_t process_tree(ptnode_t* node, fd_t stdin, fd_t stdout, fd_t stderr)
+{
+	fd_t tempfd = FD_INVALID;
+	tid_t lefttid = 0, righttid = 0;
+	switch(node->type)
+	{
+	case NONE:
+		return 0;
+		break;
+	case PIPE:
+		tempfd = sys_popen(32);
+		if (tempfd == FD_INVALID)
+			return 0;
+		lefttid = process_tree(node->left, stdin, tempfd, stderr);
+		righttid = process_tree(node->right, tempfd, stdout, stderr);
+		break;
+	case REDIR_L:
+		// Input file
+		tempfd = sys_open(node->right->tlist[0], FMODE_R, 0);
+		if (tempfd == FD_INVALID)
+			return 0;
+		lefttid = process_tree(node->left, tempfd, stdout, stderr);
+		break;
+	case REDIR_R:
+		// Output file
+		tempfd = sys_open(node->right->tlist[0], FMODE_W, FFLAG_CREAT);
+		if (tempfd == FD_INVALID)
+			return 0;
+		lefttid = process_tree(node->left, stdin, tempfd, stderr);
+		break;
+	case COMMAND:
+		return process_command(node, stdin, stdout, stderr);
+		break;
+	default:
+		return 0;
+	}
+
+	if(tempfd != FD_INVALID)
+		tempfds[tempfdidx++] = tempfd;
+
+	if (righttid)
+		return righttid;
+	if (lefttid)
+		return lefttid;
+	return 0;
+}
+
+void print_toklist(char** tokenlist, int32_t numtoks)
+{
+    int32_t i = 0;
+    while(i < numtoks)
+    {
+        s_puts(tokenlist[i++]);
+        s_putc('+');
+    }
+}
+
+void ptnode_tree_walk(ptnode_t* root)
+{
+	if (!root)
+		return;
+
+	switch (root->type)
+	{
+	case NONE:
+		return;
+	case COMMAND:
+		s_puts("Command <");
+		print_toklist(root->tlist, root->tlsiz);
+		s_puts(">");
+		return;
+	case FILENAME:
+		s_puts("Filename <");
+		print_toklist(root->tlist, root->tlsiz);
+		s_puts(">");
+		return;
+	case PIPE:
+		s_puts("Pipe <");
+		ptnode_tree_walk(root->left);
+		s_puts(",");
+		ptnode_tree_walk(root->right);
+		s_puts(">");
+		return;
+	case COND_AND:
+		s_puts("And <");
+		ptnode_tree_walk(root->left);
+		s_puts(",");
+		ptnode_tree_walk(root->right);
+		s_puts(">");
+		return;
+	case COND_OR:
+		s_puts("Or <");
+		ptnode_tree_walk(root->left);
+		s_puts(",");
+		ptnode_tree_walk(root->right);
+		s_puts(">");
+		return;
+	case REDIR_L:
+		s_puts("Input <");
+		ptnode_tree_walk(root->left);
+		s_puts(",");
+		ptnode_tree_walk(root->right);
+		s_puts(">");
+		return;
+	case REDIR_R:
+		s_puts("Output <");
+		ptnode_tree_walk(root->left);
+		s_puts(",");
+		ptnode_tree_walk(root->right);
+		s_puts(">");
+		return;
+	default:
+		return;
+	}
+}
+
+void shell_processLine(void)
+{
+	bool background = false;
+
+	char* tokenlist[TOKENLIST_LENGTH];
+	int32_t numtoks = tokenize_line(shell_lineBuffer, tokenlist);
+	ptnode_t blist[BLIST_SIZE];
+	ptnode_t* root = parse_line_toks(tokenlist, numtoks, blist, BLIST_SIZE,
+			&background);
+
+	//ptnode_tree_walk(root);
+
+	tid_t waittid = process_tree(root, 0, 1, 2);
+
+	// TODO: Handle waiting; pass back tid somehow
+	if (waittid)
+	{
+		if (!background)
 		{
-			lastret = sys_wait(tid);
+			lastret = sys_wait(waittid);
 		}
 		else
 		{
@@ -474,28 +598,24 @@ void shell_processLine(void)
 			shell_job_t* job = shell_allocJob();
 			if (job != NULL)
 			{
-				job->thread = tid;
-				job->program = shell_progMap[progidx].name;
+				job->thread = waittid;
+				job->program = shell_progMap[0].name;
 				sys_spawn(shell_job_waiter, job);
 				char printbuf[32];
-				fast_snprintf(printbuf, 32, "[%d] %d\r\n", (int)(job - shell_jobs),
-						(int)tid);
-				sys_puts(printbuf, 32);
+				fast_snprintf(printbuf, 32, "[%d] %d\r\n",
+						(int) (job - shell_jobs), (int) waittid);
+				s_puts(printbuf);
 			}
 			else
 			{
-				sys_puts("Exceeded max jobs!\r\n", 100);
+				s_puts("Exceeded max jobs!\r\n");
 			}
 		}
+	}
 
-	}
-	else
-	{
-		Serial_puts(UART_DEBUG_MODULE, shell_error_unknown_command,
-				fast_strlen(shell_error_unknown_command));
-		Serial_puts(UART_DEBUG_MODULE, shell_argBuffer[0],
-				fast_strlen(shell_argBuffer[0]));
-		Serial_puts(UART_DEBUG_MODULE, "\'\r\n", 3);
-	}
+	uint8_t i;
+	for(i = 0; i < tempfdidx; i++)
+		sys_close(tempfds[i]);
+	tempfdidx = 0;
 }
 
