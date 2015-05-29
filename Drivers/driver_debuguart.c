@@ -33,6 +33,7 @@ int32_t debuguart_read(fd_t fd, uint8_t* buf, int32_t len)
 int32_t debuguart_write(fd_t fd, const uint8_t* buf, int32_t len)
 {
 	Serial_writebuf(UART_DEBUG_MODULE, buf, len);
+	return len;
 }
 
 int32_t debuguart_seek(fd_t fd, int32_t pos)
