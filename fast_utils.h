@@ -51,6 +51,11 @@ unsigned long fast_nextmulof(unsigned long val, unsigned long q);
 
 void* fast_alloc(size_t sz);
 void fast_free(void* buf);
+void init_heap();
+
+void fast_swap8(uint8_t* a, uint8_t* b);
+void fast_swap16(uint16_t* a, uint16_t* b);
+void fast_swap32(uint32_t* a, uint32_t* b);
 
 #endif // _FAST_UTILS_H_
 
