@@ -32,7 +32,7 @@
 #define _SECTION_STRING(_symbol_,_string_,_section_) _SECTION_DECLARE(const char,_symbol_,[],_string_,_section_)
 #define _FLASH_STRING(_symbol_,_string_) _SECTION_STRING(_symbol_,_string_,FLASH)
 
-//uint8_t kernel_stack[128] __attribute((aligned(8)));
+uint8_t kernel_stack[1024] __attribute((aligned(8)));
 
 fd_assoc_t file_table[MAX_FILES] __attribute__((section("SRAM")));
 
@@ -73,6 +73,8 @@ void kernel_assert(bool cond, const char* fstr, uint32_t fstrlen);
 void kernel_enable_mpu();
 void kernel_set_memory_region(thread_t* thread);
 void kernel_set_memory_region_flash();
+
+//uint8_t kernel_stack[512] __attribute__((aligned(512)));
 
 void kernel_init()
 {
@@ -120,17 +122,6 @@ void kernel_enable_mpu()
 			"add R8,R8,$0x01\n\t"
 			"msr CONTROL,R8"
 			);
-}
-
-static uint8_t bitpos(uint32_t mask)
-{
-	uint8_t ret;
-	while(mask)
-	{
-		mask >>= 1;
-		ret++;
-	}
-	return ret;
 }
 
 /**
@@ -254,6 +245,7 @@ __attribute__((noreturn))
 static void kernel_handle_syscall()
 {
 	thread_t* child_thread;
+	fd_t sysfd;
 	switch (thread_current->regs.R0)
 	{
 
@@ -367,7 +359,7 @@ static void kernel_handle_syscall()
 		if(child_thread)
 		{
 			thread_notify_waiting(child_thread);
-			kernel_close_fds(thread_current);
+			kernel_close_fds(child_thread);
 			thread_current->regs.R0 = thread_kill(child_thread);
 		}
 		else
@@ -403,21 +395,45 @@ static void kernel_handle_syscall()
 		kernel_run(thread_current);
 		break;
 
+	case SYSCALL_REM:
+		thread_current->regs.R0 = (uint32_t) rem(thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R1));
+		kernel_run(thread_current);
+		break;
+
 	case SYSCALL_READ:
 		// TODO: VULNERABILITY
+		sysfd = thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R1);
 		thread_current->regs.R0 = (uint32_t) read(
-				thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R1),
+				sysfd,
 				(uint8_t*) thread_current->regs.R2,
 				(int32_t) thread_current->regs.R3);
+		if(((int32_t)thread_current->regs.R0) == 0 && ((int32_t)thread_current->regs.R3) > 0)
+		{
+			// If no bytes were read, and the readsize was more than 0
+			// Block 'em!
+
+			// Check if the fd is nonblocking
+			if(!(file_table[sysfd].sysflags & FFLAG_NOBLOCK))
+			{
+				thread_current->state = T_BLOCKED;
+				thread_current->wait_func = WAITING_ON_FILE;
+			}
+		}
 		kernel_schedule();
 		break;
 
 	case SYSCALL_WRITE:
 		// TODO: VULNERABILITY
+		sysfd = thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R1);
 		thread_current->regs.R0 = (uint32_t) write(
-				thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R1),
+				sysfd,
 				(const uint8_t*) thread_current->regs.R2,
 				(int32_t) thread_current->regs.R3);
+		if(thread_current->regs.R0)
+		{
+			// Let all of the blocked readers know that the file has been written to
+			thread_notify_waiting_readers(sysfd);
+		}
 		kernel_schedule();
 		break;
 
@@ -446,18 +462,22 @@ static void kernel_handle_syscall()
 		thread_current->regs.R0 = (uint32_t) thread_spawn2(
 				(void (*)(void*)) thread_current->regs.R1,
 				(void*) thread_current->regs.R2,
-				(fd_t) thread_current->regs.R3,
-				(fd_t) thread_current->regs.R4,
-				(fd_t) thread_current->regs.R5);
+				thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R3),
+				thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R4),
+				thread_lookup_fd(thread_current, (fd_t) thread_current->regs.R5));
 		kernel_schedule();
 		break;
 
 	case SYSCALL_WAIT:
+		if(tt_entry_for_tid(thread_current->regs.R1))
+		{
 		thread_current->state = T_BLOCKED;
 		thread_current->wait_func = WAITING_ON_THREAD;
 		// The thread id that thread_current is waiting on
 		// is stored in R1
 		kernel_schedule();
+		}
+		kernel_run(thread_current);
 		break;
 
 	case SYSCALL_OPEN:
@@ -475,8 +495,20 @@ static void kernel_handle_syscall()
 		kernel_run(thread_current);
 		break;
 
+	case SYSCALL_POPEN:
+		if ((thread_current->regs.R0 = thread_get_free_fd(thread_current))
+				!= FD_INVALID)
+		{
+			thread_current->regs.R0 = thread_alloc_fd(thread_current,
+					pipe_create(thread_current->regs.R1));
+		}
+		kernel_run(thread_current);
+		break;
+
 	case SYSCALL_CLOSE:
-		close(thread_free_fd(thread_current, (fd_t) thread_current->regs.R1));
+		sysfd = thread_free_fd(thread_current, (fd_t) thread_current->regs.R1);
+		close(sysfd);
+		thread_notify_waiting_readers(sysfd);
 		kernel_run(thread_current);
 		break;
 
@@ -604,6 +636,12 @@ void svc_interrupt_handler()
 	thread_current->regs.LR = oldsp[16];
 	thread_current->regs.PC = oldsp[17];
 	thread_current->regs.PSR = oldsp[18];
+
+	//
+	asm volatile(
+			"mov SP,%0"
+			: : "r" ((uint32_t)(kernel_stack + sizeof(kernel_stack))) : "memory"
+			);
 
 	/*
 	 * Determine exception cause and tick the counter/jump to schedule if SysTick
