@@ -146,6 +146,7 @@ typedef enum
 
 void hy28a_putc(char c);
 void hy28a_fast_fill(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color);
+void hy28a_set_partial_display(pdisp_num_t pdn, uint16_t y1, uint16_t y2, uint16_t yoff);
 
 void hy28a_clear(bool clearbuffer)
 {
