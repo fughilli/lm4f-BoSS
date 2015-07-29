@@ -638,7 +638,8 @@ void hy28a_putc(char c)
 		break;
 	case '\t':
 		i = 0;
-		while(i < 4)
+		hy28a_putc(' ');
+		while(i < (4 - (_cx%4)))
 		{
 			hy28a_putc(' ');
 			i++;
