@@ -149,14 +149,16 @@ int cat_main(char* argv[], int argc)
 			if (fast_strcmp(argv[findex], "-") == 0)
 			{
 				// TODO: Reader should be awoken by closing of pipe
-				while (sys_rem(STDIN) && ((readsiz = sys_read(STDIN, (uint8_t*) printbuf, 64))
-								!= RW_INVALID))
+				while ((readsiz = sys_read(STDIN, (uint8_t*) printbuf, 64))
+								!= RW_INVALID)
 				{
 					if (readsiz == 0)
 						break;
 
 					sys_write(STDOUT, (uint8_t*) printbuf, readsiz);
 				}
+
+				sys_close(STDIN);
 			}
 			else
 			{
@@ -172,9 +174,8 @@ int cat_main(char* argv[], int argc)
 				// TODO: This read shouldn't block if there are no writers; because
 				// reader/writer tracking hasn't been implemented yet, this has
 				// to check for the remaining characters in the file
-				while (sys_rem(fd)
-						&& ((readsiz = sys_read(fd, (uint8_t*) printbuf, 64))
-								!= RW_INVALID))
+				while ((readsiz = sys_read(fd, (uint8_t*) printbuf, 64))
+								!= RW_INVALID)
 				{
 					if (readsiz == 0)
 						break;
