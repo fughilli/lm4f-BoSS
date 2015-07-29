@@ -190,7 +190,8 @@ void hy28a_clear(bool clearbuffer)
 #define SPI_DATA    0x02			// RS bit 1 within start byte
 #define SPI_INDEX   0x00			// RS bit 0 within start byte 0x00
 
-#define _writeSPI(_data_) (SPI_transfer(0, (_data_)))
+//#define _writeSPI(_data_) (SPI_transfer(0, (_data_)))
+#define _writeSPI(_data_) while(!(HWREG(SSI0_BASE + SSI_O_SR) & SSI_SR_TNF)); HWREG(SSI0_BASE + SSI_O_DR) = (_data_); while(HWREG(SSI0_BASE + SSI_O_SR) & SSI_SR_BSY)
 
 static void hy28a_write_command(uint8_t command8)
 {
