@@ -47,4 +47,6 @@ typedef union
 
 uint32_t nhd_makeflags(uint8_t cx, uint8_t cy, bool wpos, uint16_t ctl, bool wctl);
 
+void nhd_init();
+
 #endif /* DRIVER_NHD0420D3Z_FL_GBW_H_ */

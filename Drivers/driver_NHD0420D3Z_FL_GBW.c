@@ -20,14 +20,28 @@
 #define NHD_HEIGHT (4)
 
 #define NHD_BACKSPACE (8)
+#define NHD_BELL_CHAR (7)
 
-uint8_t nhd_buffer[NHD_WIDTH * NHD_HEIGHT];
+static volatile uint8_t nhd_buffer[NHD_WIDTH * NHD_HEIGHT];
 
-uint8_t _cx = 0, _cy = 0;
+static volatile uint8_t _cx = 0, _cy = 0;
 
-bool consoleMode = false;
+static volatile bool consoleMode = false;
 
 void nhd_putc(char c);
+uint32_t nhd_ioctl(fd_t fd, uint32_t flags, void* arg);
+
+#define NHD_SET_UART_HS_STR ("\xFE\x61\x08")
+
+void nhd_init()
+{
+	Serial_init(UART7_MODULE, 9600);
+	Serial_writebuf(UART7_MODULE, (const uint8_t*) NHD_SET_UART_HS_STR, 3);
+	Serial_init(UART7_MODULE, 115200);
+
+	nhd_ioctl(0, nhd_makeflags(0,0,false,NHD_CONTMASK_POWERON,true), NULL);
+	nhd_ioctl(0, nhd_makeflags(0,0,false,NHD_CONTMASK_CLEAR | NHD_CONTMASK_CONSOLEMODEON | NHD_CONTMASK_BLINKON | NHD_CONTMASK_WCONT,true), NULL);
+}
 
 void nhd_writepos(uint8_t cx, uint8_t cy)
 {
@@ -49,15 +63,15 @@ void nhd_clear(bool clearbuffer)
 	Serial_writebuf(NHD_UART_MODULE, nhd_clear_buf, 2);
 
 	if(clearbuffer)
-		fast_memset(nhd_buffer, ' ', NHD_WIDTH*NHD_HEIGHT);
+		fast_memset((void*)nhd_buffer, ' ', NHD_WIDTH*NHD_HEIGHT);
 
 	_cx = _cy = 0;
 }
 
 void nhd_shiftUp()
 {
-	fast_memmove(nhd_buffer, &nhd_buffer[NHD_WIDTH], NHD_WIDTH*(NHD_HEIGHT-1));
-	fast_memset(&nhd_buffer[NHD_WIDTH*(NHD_HEIGHT-1)], ' ', NHD_WIDTH);
+	fast_memmove((void*)nhd_buffer, (void*)&nhd_buffer[NHD_WIDTH], NHD_WIDTH*(NHD_HEIGHT-1));
+	fast_memset((void*)&nhd_buffer[NHD_WIDTH*(NHD_HEIGHT-1)], ' ', NHD_WIDTH);
 
 	uint8_t old_cx = _cx;
 
@@ -99,7 +113,7 @@ void nhd_back()
 void nhd_putc(char c)
 {
 	bool changedLine = false;
-	int i;
+	int i = 0;
 	switch(c)
 	{
 	case '\n':
@@ -128,15 +142,16 @@ void nhd_putc(char c)
 		changedLine = true;
 		break;
 	case '\t':
+		i = 0;
 		while(i < 4)
 		{
 			nhd_putc(' ');
 			i++;
 		}
 		break;
+	case NHD_BELL_CHAR:
+		break;
 	case NHD_BACKSPACE:
-		nhd_back();
-		nhd_putc(' ');
 		nhd_back();
 		break;
 	default:
