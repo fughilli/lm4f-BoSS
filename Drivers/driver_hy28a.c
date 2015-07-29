@@ -760,6 +760,22 @@ uint32_t hy28a_ioctl(fd_t fd, uint32_t flags, void* arg)
 		//_gcy = win->y;
 
 		return HY28A_SET_WINDOW;
+	} else if(flags & HY28A_SET_FONT_SIZE)
+	{
+		hy28a_font_size_t fsize = (hy28a_font_size_t)arg;
+
+		switch (fsize)
+		{
+		default:
+		case HY28A_FONT_SIZE_5x7:
+			hy28a_load_font(&hy28a_font_5x7);
+			break;
+		case HY28A_FONT_SIZE_9x15:
+			hy28a_load_font(&hy28a_font_9x15);
+			break;
+		}
+
+		return HY28A_SET_FONT_SIZE;
 	}
 
 	return IOCTL_INVALID;

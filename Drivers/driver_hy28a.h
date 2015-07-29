@@ -50,6 +50,12 @@ typedef struct
 	uint16_t h;
 } hy28a_window_t;
 
+typedef enum
+{
+	HY28A_FONT_SIZE_5x7 = 0,
+	HY28A_FONT_SIZE_9x15 = 1
+} hy28a_font_size_t;
+
 extern const fd_funmap_t hy28a_funmap;
 
 #endif /* DRIVER_HY28A_H_ */
